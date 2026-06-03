@@ -2,23 +2,20 @@
 
 namespace Database\Factories;
 
-use App\Models\Director;
-use App\Models\User;
+use App\Models\AcademicTutor;
+use App\Models\Teacher;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Director>
+ * @extends Factory<AcademicTutor>
  */
-class DirectorFactory extends Factory
+class AcademicTutorFactory extends Factory
 {
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        $user = User::factory()->director()->create();
-
         return [
-            'id' => $user->id,
-            'user_id' => $user->id,
+            'teacher_id' => Teacher::factory(),
             'is_active' => true,
         ];
     }

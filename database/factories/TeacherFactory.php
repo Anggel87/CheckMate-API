@@ -2,23 +2,24 @@
 
 namespace Database\Factories;
 
-use App\Models\Director;
+use App\Models\Teacher;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Director>
+ * @extends Factory<Teacher>
  */
-class DirectorFactory extends Factory
+class TeacherFactory extends Factory
 {
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        $user = User::factory()->director()->create();
-
         return [
-            'id' => $user->id,
-            'user_id' => $user->id,
+            'user_id' => User::factory()->teacher(),
+            'speciality' => fake()->optional(0.6)->randomElement([
+                'Matemáticas', 'Español', 'Ciencias', 'Historia', 'Inglés',
+                'Educación Física', 'Arte', 'Geografía', 'Tecnología',
+            ]),
             'is_active' => true,
         ];
     }

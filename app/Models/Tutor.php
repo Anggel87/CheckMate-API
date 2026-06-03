@@ -6,58 +6,61 @@ use Database\Factories\TutorFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Tutor legal o familiar del alumno (padre, madre, tutor externo).
- * No tiene login por defecto. Entidad separada de TutorAcademico.
+ * Legal or family tutor of a student (parent, guardian, etc.).
+ * No login by default. Separate entity from AcademicTutor.
  *
  * @property int $id
- * @property string $nombre
- * @property string $apellido_paterno
- * @property string|null $apellido_materno
- * @property string|null $telefono
- * @property string|null $correo
- * @property string|null $direccion
- * @property string|null $parentesco
- * @property bool $recibe_notificaciones
- * @property bool $activo
+ * @property string $first_name
+ * @property string|null $second_name
+ * @property string $first_surname
+ * @property string $second_surname
+ * @property string $phone
+ * @property bool $is_active
  */
 class Tutor extends Model
 {
     /** @use HasFactory<TutorFactory> */
     use HasFactory;
 
-    protected $table = 'tutores';
-
     protected $fillable = [
-        'nombre',
-        'apellido_paterno',
-        'apellido_materno',
-        'telefono',
-        'correo',
-        'direccion',
-        'parentesco',
-        'recibe_notificaciones',
-        'activo',
+        'first_name',
+        'second_name',
+        'first_surname',
+        'second_surname',
+        'phone',
+        'is_active',
     ];
 
     protected function casts(): array
     {
         return [
-            'recibe_notificaciones' => 'boolean',
-            'activo' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
-    public function nombreCompleto(): string
+    public function fullName(): string
     {
-        return trim("{$this->nombre} {$this->apellido_paterno} {$this->apellido_materno}");
+        return trim("{$this->first_name} {$this->first_surname} {$this->second_surname}");
     }
 
-    public function alumnos(): BelongsToMany
+    public function students(): BelongsToMany
     {
-        return $this->belongsToMany(Alumno::class, 'alumno_tutor')
-            ->withPivot(['tipo_responsable', 'principal'])
+        return $this->belongsToMany(Student::class, 'student_tutor', 'tutor_id', 'student_id')
+            ->withPivot(['relationship', 'is_primary', 'receives_notifications'])
             ->withTimestamps();
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(Address::class, 'tutors_id');
+    }
+
+    public function notificationPreference(): HasOne
+    {
+        return $this->hasOne(NotificationPreference::class, 'tutor_id');
     }
 }

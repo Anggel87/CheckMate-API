@@ -10,31 +10,21 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class TutorFactory extends Factory
 {
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function definition(): array
     {
         return [
-            'nombre' => fake()->firstName(),
-            'apellido_paterno' => fake()->lastName(),
-            'apellido_materno' => fake()->optional(0.8)->lastName(),
-            'telefono' => fake()->optional(0.9)->numerify('6##-###-####'),
-            'correo' => fake()->optional(0.7)->safeEmail(),
-            'direccion' => fake()->optional(0.6)->address(),
-            'parentesco' => fake()->randomElement(['PADRE', 'MADRE', 'TUTOR', 'OTRO']),
-            'recibe_notificaciones' => true,
-            'activo' => true,
+            'first_name' => fake()->firstName(),
+            'second_name' => fake()->optional(0.3)->firstName(),
+            'first_surname' => fake()->lastName(),
+            'second_surname' => fake()->lastName(),
+            'phone' => fake()->numerify('##########'),
+            'is_active' => true,
         ];
-    }
-
-    public function sinNotificaciones(): static
-    {
-        return $this->state(['recibe_notificaciones' => false]);
     }
 
     public function inactive(): static
     {
-        return $this->state(['activo' => false]);
+        return $this->state(['is_active' => false]);
     }
 }

@@ -2,29 +2,27 @@
 
 namespace App\Models;
 
-use Database\Factories\DirectorFactory;
+use Database\Factories\TeacherFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
  * @property int $user_id
+ * @property string|null $speciality
  * @property bool $is_active
  */
-class Director extends Model
+class Teacher extends Model
 {
-    /** @use HasFactory<DirectorFactory> */
+    /** @use HasFactory<TeacherFactory> */
     use HasFactory;
 
-    public $incrementing = false;
-
-    protected $keyType = 'integer';
-
     protected $fillable = [
-        'id',
         'user_id',
+        'speciality',
         'is_active',
     ];
 
@@ -40,8 +38,13 @@ class Director extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function careers(): HasMany
+    public function academicTutor(): HasOne
     {
-        return $this->hasMany(Career::class, 'directors_id');
+        return $this->hasOne(AcademicTutor::class, 'teacher_id');
+    }
+
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(Schedule::class, 'teacher_id');
     }
 }
