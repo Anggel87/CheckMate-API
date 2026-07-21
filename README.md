@@ -1,55 +1,55 @@
-# Guía de Inicio Rápido (Entorno Local)
+# CheckMate API - Entorno Docker
 
-Este proyecto está configurado para correr de forma nativa en tu máquina local (sin Docker).
-
-## Requisitos Previos
-Asegúrate de tener instalado globalmente en tu sistema:
-* **PHP 8.4** o superior
-* **Composer** (Gestor de dependencias de PHP)
-* **MySQL** (ya sea nativo, o mediante herramientas como Laragon, XAMPP o MAMP)
+Se agregaron los archivos Docker necesarios y se validó que el proyecto levanta correctamente.
 
 ---
 
-## Pasos para la Inicialización
+## Archivos Creados
 
-Sigue estos pasos en orden desde la terminal de tu proyecto:
-
-### 1. Configurar el entorno (.env)
-Duplica el archivo de ejemplo para crear tu configuración real:
-```bash
-cp .env.example .env
-```
-
-### 2. Instalar dependencias de PHP
-Descarga todas las librerías del framework y los paquetes adicionales (como Scribe):
-
-```bash
-composer install
-```
-
-### 3. Generar la clave de seguridad
-Crea la firma única de encriptación para tu aplicación:
-
-```bash
-php artisan key:generate
-```
-
-### 4. Ejecutar las migraciones
-Crea la estructura de tablas y el sistema de tokens para la API en tu base de datos:
-
-```bash
-php artisan migrate
-```
-
-### 5. Generar la documentación (Scribe)
-Compila la documentación interactiva de la API basada en tus controladores:
-
-```bash
-php artisan scribe:generate
-```
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
+- `.env.docker`
+- `docker/entrypoint.sh`
 
 ---
 
-Ruta base de la API: http://127.0.0.1:8000/api
+## Incluye
 
-Ver Documentación Interactiva: http://127.0.0.1:8000/docs/index.html
+- PHP `8.4`
+- Node `22`
+- Composer dentro del contenedor
+- npm dependencies dentro de volumen Docker
+- Composer dependencies dentro de volumen Docker
+- MySQL `8.4`
+- Migraciones automáticas al arrancar
+- Limpieza de caches de Laravel para evitar usar configuración local cacheada
+- `.env.docker` separado para no depender de tu `.env` local
+
+---
+
+## Qué hace el `entrypoint.sh` automáticamente
+
+Al levantar el contenedor por primera vez, el script se encarga de todo sin intervención manual:
+
+1. Copia `.env.example` a `.env` si no existe.
+2. Instala dependencias de Composer si `vendor/` está vacío o no existe.
+3. Instala dependencias de npm si `node_modules/` está vacío o no existe.
+4. Limpia caches de Laravel (`config`, `route`, `view`, `event`).
+5. Genera la `APP_KEY` automáticamente si no está definida en el `.env`.
+6. Espera a que MySQL esté disponible antes de continuar.
+7. Ejecuta las migraciones (`migrate --force`).
+
+**En resumen: solo necesitas levantar el contenedor, no hay pasos manuales de configuración inicial.**
+
+
+---
+
+## Comandos Útiles
+
+```bash
+docker compose up -d --build
+docker compose exec app php artisan migrate
+docker compose exec app php artisan test --compact
+docker compose down
+```
