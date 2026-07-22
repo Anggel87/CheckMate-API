@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Career;
-use App\Models\Director;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -12,11 +12,11 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class CareerFactory extends Factory
 {
     private static array $careers = [
-        ['name' => 'Tecnologías de la Información y Comunicación', 'short' => 'TIC', 'code' => 'TIC'],
-        ['name' => 'Administración de Empresas', 'short' => 'ADM', 'code' => 'ADM'],
+        ['name' => 'Tecnologias de la Informacion y Comunicacion', 'short' => 'TIC', 'code' => 'TIC'],
+        ['name' => 'Administracion de Empresas', 'short' => 'ADM', 'code' => 'ADM'],
         ['name' => 'Contabilidad y Finanzas', 'short' => 'CONT', 'code' => 'CONT'],
         ['name' => 'Turismo y Hospitalidad', 'short' => 'TUR', 'code' => 'TUR'],
-        ['name' => 'Mecatrónica Industrial', 'short' => 'MEC', 'code' => 'MEC'],
+        ['name' => 'Mecatronica Industrial', 'short' => 'MEC', 'code' => 'MEC'],
     ];
 
     /** @return array<string, mixed> */
@@ -29,7 +29,7 @@ class CareerFactory extends Factory
             'short_name' => $career['short'],
             'code' => $career['code'].'-'.fake()->numberBetween(1, 9),
             'is_active' => true,
-            'directors_id' => Director::factory(),
+            'director_id' => User::factory()->careerDirector(),
         ];
     }
 

@@ -17,10 +17,10 @@ return new class extends Migration
             $table->string('reason', 255);
             $table->string('file', 255)->nullable();
             $table->dateTime('justified_at');
-            $table->enum('status', ['PENDING', 'ACCEPTED', 'REJECTED'])->default('PENDING')->index();
+            $table->enum('status', ['PENDIENTE', 'ACEPTADO', 'RECHAZADO'])->default('PENDIENTE')->index();
             $table->timestamps();
 
-            $table->index('attendance_id');
+            $table->unique('attendance_id');
         });
     }
 

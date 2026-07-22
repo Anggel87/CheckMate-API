@@ -13,13 +13,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $short_name
  * @property string $code
  * @property bool $is_active
- * @property int $directors_id
+ * @property int $director_id
  */
 class Career extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'short_name', 'code', 'is_active', 'directors_id'];
+    protected $fillable = ['name', 'short_name', 'code', 'is_active', 'director_id'];
 
     protected function casts(): array
     {
@@ -30,7 +30,7 @@ class Career extends Model
 
     public function director(): BelongsTo
     {
-        return $this->belongsTo(Director::class, 'directors_id');
+        return $this->belongsTo(User::class, 'director_id');
     }
 
     public function groups(): HasMany

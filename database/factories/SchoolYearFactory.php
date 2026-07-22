@@ -19,17 +19,17 @@ class SchoolYearFactory extends Factory
             'name' => "{$year}-".($year + 1),
             'start_date' => "{$year}-08-01",
             'end_date' => ($year + 1).'-06-30',
-            'status' => 'UPCOMING',
+            'status' => 'PROXIMO',
         ];
     }
 
     public function active(): static
     {
-        return $this->state(['status' => 'ACTIVE']);
+        return $this->state(['status' => 'ACTIVO']);
     }
 
     public function finished(): static
     {
-        return $this->state(['status' => 'FINISHED']);
+        return $this->state(['status' => 'FINALIZADO']);
     }
 }

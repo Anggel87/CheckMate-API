@@ -8,20 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('careers', function (Blueprint $table) {
+        Schema::create('permission_groups', function (Blueprint $table) {
             $table->tinyIncrements('id');
-            $table->string('name', 150);
-            $table->string('short_name', 20)->nullable();
-            $table->string('code', 30)->unique();
+            $table->string('name', 50);
+            $table->string('key_name', 50)->unique();
+            $table->string('description', 255)->nullable();
             $table->boolean('is_active')->default(true)->index();
-            $table->unsignedMediumInteger('director_id');
-            $table->foreign('director_id')->references('id')->on('users')->restrictOnDelete();
             $table->timestamps();
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('careers');
+        Schema::dropIfExists('permission_groups');
     }
 };

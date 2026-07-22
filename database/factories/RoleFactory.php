@@ -16,27 +16,27 @@ class RoleFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => 'STUDENT',
+            'name' => 'alumno',
         ];
     }
 
     public function admin(): static
     {
-        return $this->state(['name' => 'ADMIN']);
+        return $this->state(['name' => 'administrador']);
     }
 
     public function director(): static
     {
-        return $this->state(['name' => 'DIRECTOR']);
+        return $this->state(['name' => 'director_carrera']);
     }
 
     public function teacher(): static
     {
-        return $this->state(['name' => 'TEACHER']);
+        return $this->state(['name' => 'profesor']);
     }
 
     public function student(): static
     {
-        return $this->state(['name' => 'STUDENT']);
+        return $this->state(['name' => 'alumno']);
     }
 }

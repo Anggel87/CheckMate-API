@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\AcademicTutor;
-use App\Models\Teacher;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -15,7 +15,7 @@ class AcademicTutorFactory extends Factory
     public function definition(): array
     {
         return [
-            'teacher_id' => Teacher::factory(),
+            'user_id' => User::factory()->academicTutor(),
             'is_active' => true,
         ];
     }

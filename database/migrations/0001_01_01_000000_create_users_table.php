@@ -12,6 +12,7 @@ return new class extends Migration
             $table->mediumIncrements('id');
             $table->unsignedTinyInteger('role_id');
             $table->foreign('role_id')->references('id')->on('roles');
+            $table->unsignedMediumInteger('group_id')->nullable()->index();
             $table->string('first_name', 45);
             $table->string('second_name', 45)->nullable();
             $table->string('first_surname', 45);
@@ -20,10 +21,10 @@ return new class extends Migration
             $table->string('password', 255);
             $table->dateTime('verified_at')->nullable();
             $table->boolean('active')->default(true)->index();
-            $table->string('photo', 255)->nullable();
-            $table->string('phone', 10)->nullable();
-            $table->date('birth_date')->nullable();
-            $table->enum('gender', ['M', 'F', 'OTRO'])->nullable();
+            $table->string('photo', 255);
+            $table->string('phone', 10);
+            $table->date('birth_date');
+            $table->enum('gender', ['M', 'F', 'OTRO']);
             $table->timestamps();
         });
 

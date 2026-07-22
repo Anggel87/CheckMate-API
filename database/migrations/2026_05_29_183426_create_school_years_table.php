@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('name', 50)->unique();
             $table->date('start_date');
             $table->date('end_date');
-            $table->enum('status', ['UPCOMING', 'ACTIVE', 'FINISHED'])->default('UPCOMING')->index();
+            $table->enum('status', ['PROXIMO', 'ACTIVO', 'FINALIZADO'])->default('PROXIMO')->index();
             $table->timestamps();
         });
     }

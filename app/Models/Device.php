@@ -36,4 +36,9 @@ class Device extends Model
     {
         return $this->hasMany(Attendance::class, 'devices_id');
     }
+
+    public function classSessions(): HasMany
+    {
+        return $this->hasMany(ClassSession::class, 'device_id');
+    }
 }

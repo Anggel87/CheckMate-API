@@ -20,7 +20,7 @@ class GroupFactory extends Factory
             'career_id' => Career::factory(),
             'section' => fake()->randomElement(['A', 'B', 'C', 'D']),
             'grade' => (string) fake()->numberBetween(1, 6),
-            'shift' => fake()->randomElement(['MORNING', 'AFTERNOON', 'EVENING']),
+            'shift' => fake()->randomElement(['MATUTINO', 'VESPERTINO', 'INGENIERIA']),
             'is_active' => true,
         ];
     }

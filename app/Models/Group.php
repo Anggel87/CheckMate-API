@@ -42,14 +42,20 @@ class Group extends Model
         return $this->belongsTo(Career::class, 'career_id');
     }
 
-    public function students(): HasMany
-    {
-        return $this->hasMany(Student::class, 'group_id');
-    }
-
     public function schedules(): HasMany
     {
         return $this->hasMany(Schedule::class, 'group_id');
+    }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'group_id');
+    }
+
+    public function students(): HasMany
+    {
+        return $this->users()
+            ->whereHas('role', fn ($query) => $query->where('name', 'alumno'));
     }
 
     public function academicTutors(): BelongsToMany

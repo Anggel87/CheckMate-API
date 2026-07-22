@@ -8,11 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('teachers', function (Blueprint $table) {
-            $table->smallIncrements('id');
-            $table->unsignedMediumInteger('user_id');
-            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
-            $table->string('speciality', 150)->nullable();
+        Schema::create('permissions', function (Blueprint $table) {
+            $table->tinyIncrements('id');
+            $table->string('name', 100);
+            $table->string('key_name', 100)->unique();
+            $table->string('description', 255)->nullable();
             $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
         });
@@ -20,6 +20,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('teachers');
+        Schema::dropIfExists('permissions');
     }
 };

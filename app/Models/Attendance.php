@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
+ * @property int $class_session_id
  * @property int $student_id
  * @property int $schedule_id
  * @property int $devices_id
@@ -22,6 +24,7 @@ class Attendance extends Model
     use HasFactory;
 
     protected $fillable = [
+        'class_session_id',
         'student_id',
         'schedule_id',
         'devices_id',
@@ -39,7 +42,12 @@ class Attendance extends Model
 
     public function student(): BelongsTo
     {
-        return $this->belongsTo(Student::class, 'student_id');
+        return $this->belongsTo(User::class, 'student_id');
+    }
+
+    public function classSession(): BelongsTo
+    {
+        return $this->belongsTo(ClassSession::class, 'class_session_id');
     }
 
     public function schedule(): BelongsTo
@@ -57,8 +65,8 @@ class Attendance extends Model
         return $this->hasMany(Claim::class, 'attendance_id');
     }
 
-    public function justifications(): HasMany
+    public function justification(): HasOne
     {
-        return $this->hasMany(Justification::class, 'attendance_id');
+        return $this->hasOne(Justification::class, 'attendance_id');
     }
 }

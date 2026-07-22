@@ -11,16 +11,17 @@ return new class extends Migration
         Schema::create('notifications', function (Blueprint $table) {
             $table->increments('id');
             $table->unsignedMediumInteger('student_id');
-            $table->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+            $table->foreign('student_id')->references('id')->on('users')->cascadeOnDelete();
             $table->unsignedMediumInteger('tutor_id');
             $table->foreign('tutor_id')->references('id')->on('tutors')->cascadeOnDelete();
             $table->unsignedMediumInteger('user_id');
             $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
             $table->string('title', 90);
             $table->string('message', 350);
-            $table->enum('type', ['ABSENCE', 'LATE', 'INCIDENT', 'JUSTIFICATION', 'CLAIM', 'ANNOUNCEMENT', 'TEACHER_CLAIM']);
+            $table->enum('type', ['INASISTENCIA', 'RETARDO', 'INCIDENTE', 'JUSTIFICANTE', 'RECLAMO', 'AVISO', 'RECLAMO_PROFESOR']);
             $table->boolean('is_read')->default(false)->index();
             $table->dateTime('sent_at')->nullable();
+            $table->timestamps();
 
             $table->index('student_id');
             $table->index('tutor_id');

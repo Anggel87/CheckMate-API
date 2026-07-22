@@ -3,24 +3,24 @@
 namespace Database\Seeders;
 
 use App\Models\Career;
-use App\Models\Director;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class CareerSeeder extends Seeder
 {
     public function run(): void
     {
-        $directors = Director::all();
+        $directors = User::whereHas('role', fn ($query) => $query->where('name', 'director_carrera'))->get();
 
         $careers = [
             [
-                'name' => 'Tecnologías de la Información y Comunicación',
+                'name' => 'Tecnologias de la Informacion y Comunicacion',
                 'short_name' => 'TIC',
                 'code' => 'TIC',
                 'is_active' => true,
             ],
             [
-                'name' => 'Administración de Empresas',
+                'name' => 'Administracion de Empresas',
                 'short_name' => 'ADM',
                 'code' => 'ADM',
                 'is_active' => true,
@@ -32,7 +32,7 @@ class CareerSeeder extends Seeder
                 'is_active' => true,
             ],
             [
-                'name' => 'Mecatrónica Industrial',
+                'name' => 'Mecatronica Industrial',
                 'short_name' => 'MEC',
                 'code' => 'MEC',
                 'is_active' => true,
@@ -42,7 +42,7 @@ class CareerSeeder extends Seeder
         foreach ($careers as $index => $career) {
             Career::create([
                 ...$career,
-                'directors_id' => $directors[$index % $directors->count()]->id,
+                'director_id' => $directors[$index % $directors->count()]->id,
             ]);
         }
     }

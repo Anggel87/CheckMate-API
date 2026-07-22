@@ -7,20 +7,22 @@ use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\SchoolYear;
 use App\Models\Subject;
-use App\Models\Teacher;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class ScheduleSeeder extends Seeder
 {
     public function run(): void
     {
-        $schoolYear = SchoolYear::firstWhere('status', 'ACTIVE');
+        $schoolYear = SchoolYear::firstWhere('status', 'ACTIVO');
         $groups = Group::all()->where('is_active', true);
         $subjects = Subject::all()->where('is_active', true);
-        $teachers = Teacher::all()->where('is_active', true);
+        $teachers = User::where('active', true)
+            ->whereHas('role', fn ($query) => $query->whereIn('name', ['profesor', 'tutor_academico']))
+            ->get();
         $classrooms = Classroom::all();
 
-        $days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+        $days = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
 
         $timeSlots = [
             ['07:00:00', '08:00:00'],

@@ -16,11 +16,11 @@ return new class extends Migration
             $table->foreign('group_id')->references('id')->on('groups')->cascadeOnDelete();
             $table->unsignedSmallInteger('subject_id');
             $table->foreign('subject_id')->references('id')->on('subjects')->cascadeOnDelete();
-            $table->unsignedSmallInteger('teacher_id');
-            $table->foreign('teacher_id')->references('id')->on('teachers')->cascadeOnDelete();
+            $table->unsignedMediumInteger('teacher_id');
+            $table->foreign('teacher_id')->references('id')->on('users')->restrictOnDelete();
             $table->unsignedTinyInteger('classroom_id');
             $table->foreign('classroom_id')->references('id')->on('classroom')->cascadeOnDelete();
-            $table->enum('day_of_week', ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']);
+            $table->enum('day_of_week', ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO']);
             $table->time('start_time');
             $table->time('end_time');
             $table->boolean('is_active')->default(true)->index();

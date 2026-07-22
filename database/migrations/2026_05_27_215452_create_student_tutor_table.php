@@ -13,7 +13,7 @@ return new class extends Migration
             $table->unsignedMediumInteger('tutor_id');
             $table->foreign('tutor_id')->references('id')->on('tutors')->cascadeOnDelete();
             $table->unsignedMediumInteger('student_id');
-            $table->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
+            $table->foreign('student_id')->references('id')->on('users')->cascadeOnDelete();
             $table->string('relationship', 50);
             $table->boolean('is_primary')->default(false);
             $table->boolean('receives_notifications')->default(true);

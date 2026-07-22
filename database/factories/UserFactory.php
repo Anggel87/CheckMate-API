@@ -18,7 +18,7 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'role_id' => Role::firstOrCreate(['name' => 'STUDENT'])->id,
+            'role_id' => Role::firstOrCreate(['name' => 'alumno'])->id,
             'first_name' => fake()->firstName(),
             'second_name' => fake()->optional(0.4)->firstName(),
             'first_surname' => fake()->lastName(),
@@ -27,7 +27,7 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'verified_at' => now(),
             'active' => true,
-            'photo' => null,
+            'photo' => 'users/default.png',
             'phone' => fake()->numerify('##########'),
             'birth_date' => fake()->dateTimeBetween('-60 years', '-18 years')->format('Y-m-d'),
             'gender' => fake()->randomElement(['M', 'F', 'OTRO']),
@@ -36,22 +36,41 @@ class UserFactory extends Factory
 
     public function director(): static
     {
+        return $this->careerDirector();
+    }
+
+    public function careerDirector(): static
+    {
         return $this->state(fn (array $attributes) => [
-            'role_id' => Role::firstOrCreate(['name' => 'DIRECTOR'])->id,
+            'role_id' => Role::firstOrCreate(['name' => 'director_carrera'])->id,
         ]);
     }
 
     public function teacher(): static
     {
         return $this->state(fn (array $attributes) => [
-            'role_id' => Role::firstOrCreate(['name' => 'TEACHER'])->id,
+            'role_id' => Role::firstOrCreate(['name' => 'profesor'])->id,
+        ]);
+    }
+
+    public function academicTutor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role_id' => Role::firstOrCreate(['name' => 'tutor_academico'])->id,
+        ]);
+    }
+
+    public function administrator(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role_id' => Role::firstOrCreate(['name' => 'administrador'])->id,
         ]);
     }
 
     public function student(): static
     {
         return $this->state(fn (array $attributes) => [
-            'role_id' => Role::firstOrCreate(['name' => 'STUDENT'])->id,
+            'role_id' => Role::firstOrCreate(['name' => 'alumno'])->id,
         ]);
     }
 

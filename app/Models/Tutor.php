@@ -49,7 +49,7 @@ class Tutor extends Model
 
     public function students(): BelongsToMany
     {
-        return $this->belongsToMany(Student::class, 'student_tutor', 'tutor_id', 'student_id')
+        return $this->belongsToMany(User::class, 'student_tutor', 'tutor_id', 'student_id')
             ->withPivot(['relationship', 'is_primary', 'receives_notifications'])
             ->withTimestamps();
     }
@@ -62,5 +62,15 @@ class Tutor extends Model
     public function notificationPreference(): HasOne
     {
         return $this->hasOne(NotificationPreference::class, 'tutor_id');
+    }
+
+    public function notificationPreferences(): HasOne
+    {
+        return $this->notificationPreference();
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(AppNotification::class, 'tutor_id');
     }
 }

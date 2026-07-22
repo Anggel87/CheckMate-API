@@ -16,23 +16,23 @@ return new class extends Migration
             $table->foreign('career_id')->references('id')->on('careers')->cascadeOnDelete();
             $table->string('section', 5);
             $table->string('grade', 5);
-            $table->enum('shift', ['MORNING', 'AFTERNOON', 'EVENING'])->nullable();
+            $table->enum('shift', ['MATUTINO', 'VESPERTINO', 'INGENIERIA'])->nullable();
             $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
 
-            $table->unique(['school_year_id', 'career_id', 'section', 'grade']);
+            $table->unique(['school_year_id', 'career_id', 'grade', 'section']);
             $table->index('school_year_id');
             $table->index('career_id');
         });
 
-        Schema::table('students', function (Blueprint $table) {
+        Schema::table('users', function (Blueprint $table) {
             $table->foreign('group_id')->references('id')->on('groups')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
-        Schema::table('students', function (Blueprint $table) {
+        Schema::table('users', function (Blueprint $table) {
             $table->dropForeign(['group_id']);
         });
 

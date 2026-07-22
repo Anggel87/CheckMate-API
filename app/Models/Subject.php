@@ -30,6 +30,6 @@ class Subject extends Model
 
     public function schedules(): HasMany
     {
-        return $this->hasMany(Schedule::class, 'subjects_id');
+        return $this->hasMany(Schedule::class, 'subject_id');
     }
 }

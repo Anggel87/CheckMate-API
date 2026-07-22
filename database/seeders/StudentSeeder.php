@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Group;
-use App\Models\Student;
 use App\Models\Tutor;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class StudentSeeder extends Seeder
@@ -13,12 +13,12 @@ class StudentSeeder extends Seeder
     {
         $groups = Group::all()->where('is_active', true);
         $tutors = Tutor::all();
-        $relationships = ['MADRE', 'PADRE', 'TUTOR', 'ABUELO', 'ABUELA', 'TÍO', 'TÍA'];
+        $relationships = ['Madre', 'Padre', 'Tutor', 'Abuelo', 'Abuela', 'Tio', 'Tia'];
 
         foreach ($groups as $group) {
-            $students = Student::factory()
+            $students = User::factory()
+                ->student()
                 ->count(7)
-                ->withQr()
                 ->create(['group_id' => $group->id]);
 
             foreach ($students as $student) {

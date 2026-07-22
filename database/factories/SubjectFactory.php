@@ -11,9 +11,9 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class SubjectFactory extends Factory
 {
     private static array $subjects = [
-        'Matemáticas', 'Español', 'Historia', 'Ciencias Naturales',
-        'Inglés', 'Geografía', 'Física', 'Química', 'Biología',
-        'Educación Física', 'Arte', 'Tecnología',
+        'Matematicas', 'Espanol', 'Historia', 'Ciencias Naturales',
+        'Ingles', 'Geografia', 'Fisica', 'Quimica', 'Biologia',
+        'Educacion Fisica', 'Arte', 'Tecnologia',
     ];
 
     /** @return array<string, mixed> */

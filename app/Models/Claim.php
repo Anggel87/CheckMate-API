@@ -9,7 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $attendance_id
- * @property int $reviewed_by_user_id
+ * @property int $tutor_id
+ * @property int $director_id
  * @property string $description
  * @property string|null $evidence
  * @property string $status
@@ -20,7 +21,8 @@ class Claim extends Model
 
     protected $fillable = [
         'attendance_id',
-        'reviewed_by_user_id',
+        'tutor_id',
+        'director_id',
         'description',
         'evidence',
         'status',
@@ -31,8 +33,13 @@ class Claim extends Model
         return $this->belongsTo(Attendance::class, 'attendance_id');
     }
 
-    public function reviewedBy(): BelongsTo
+    public function tutor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reviewed_by_user_id');
+        return $this->belongsTo(User::class, 'tutor_id');
+    }
+
+    public function director(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'director_id');
     }
 }

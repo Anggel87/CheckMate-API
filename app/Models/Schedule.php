@@ -57,7 +57,7 @@ class Schedule extends Model
 
     public function teacher(): BelongsTo
     {
-        return $this->belongsTo(Teacher::class, 'teacher_id');
+        return $this->belongsTo(User::class, 'teacher_id');
     }
 
     public function subject(): BelongsTo
@@ -70,7 +70,7 @@ class Schedule extends Model
         return $this->belongsTo(Classroom::class, 'classroom_id');
     }
 
-    public function attendanceSetting(): HasOne
+    public function settings(): HasOne
     {
         return $this->hasOne(AttendanceSetting::class, 'schedule_id');
     }
@@ -78,6 +78,11 @@ class Schedule extends Model
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class, 'schedule_id');
+    }
+
+    public function classSessions(): HasMany
+    {
+        return $this->hasMany(ClassSession::class, 'schedule_id');
     }
 
     public function incidents(): HasMany

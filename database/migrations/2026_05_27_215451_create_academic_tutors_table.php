@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('academic_tutors', function (Blueprint $table) {
             $table->smallIncrements('id');
-            $table->unsignedSmallInteger('teacher_id')->unique();
-            $table->foreign('teacher_id')->references('id')->on('teachers')->cascadeOnDelete();
+            $table->unsignedMediumInteger('user_id')->unique();
+            $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

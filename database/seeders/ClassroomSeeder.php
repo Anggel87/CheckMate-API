@@ -14,8 +14,8 @@ class ClassroomSeeder extends Seeder
             ['name' => 'Aula 102', 'building' => 'Edificio A'],
             ['name' => 'Aula 201', 'building' => 'Edificio B'],
             ['name' => 'Aula 202', 'building' => 'Edificio B'],
-            ['name' => 'Lab Cómputo 1', 'building' => 'Laboratorio'],
-            ['name' => 'Lab Cómputo 2', 'building' => 'Laboratorio'],
+            ['name' => 'Laboratorio de Computo 1', 'building' => 'Laboratorio'],
+            ['name' => 'Laboratorio de Computo 2', 'building' => 'Laboratorio'],
         ];
 
         foreach ($classrooms as $classroom) {

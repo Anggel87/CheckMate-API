@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -16,6 +17,7 @@ use Laravel\Sanctum\HasApiTokens;
 /**
  * @property int $id
  * @property int $role_id
+ * @property int|null $group_id
  * @property string $first_name
  * @property string|null $second_name
  * @property string $first_surname
@@ -37,6 +39,7 @@ class User extends Authenticatable
     /** @var list<string> */
     protected $fillable = [
         'role_id',
+        'group_id',
         'first_name',
         'second_name',
         'first_surname',
@@ -88,28 +91,105 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class, 'role_id');
     }
 
-    public function student(): HasOne
+    public function group(): BelongsTo
     {
-        return $this->hasOne(Student::class, 'user_id');
+        return $this->belongsTo(Group::class, 'group_id');
     }
 
-    public function teacher(): HasOne
+    public function details(): HasOne
     {
-        return $this->hasOne(Teacher::class, 'user_id');
+        return $this->hasOne(UserDetail::class, 'user_id');
     }
 
-    public function director(): HasOne
+    public function tutors(): BelongsToMany
     {
-        return $this->hasOne(Director::class, 'user_id');
+        return $this->belongsToMany(Tutor::class, 'student_tutor', 'student_id', 'tutor_id')
+            ->withPivot(['relationship', 'is_primary', 'receives_notifications'])
+            ->withTimestamps();
     }
 
-    public function academicTutor(): HasOneThrough
+    public function attendances(): HasMany
     {
-        return $this->hasOneThrough(AcademicTutor::class, Teacher::class, 'user_id', 'teacher_id');
+        return $this->hasMany(Attendance::class, 'student_id');
+    }
+
+    public function claims(): HasMany
+    {
+        return $this->hasMany(Claim::class, 'tutor_id');
+    }
+
+    public function justifications(): HasMany
+    {
+        return $this->hasMany(Justification::class, 'justified_by_user_id');
+    }
+
+    public function incidentStudents(): HasMany
+    {
+        return $this->hasMany(IncidentStudent::class, 'student_id');
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(AppNotification::class, 'user_id');
+    }
+
+    public function studentNotifications(): HasMany
+    {
+        return $this->hasMany(AppNotification::class, 'student_id');
+    }
+
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(Schedule::class, 'teacher_id');
+    }
+
+    public function classSessions(): HasMany
+    {
+        return $this->hasMany(ClassSession::class, 'teacher_id');
+    }
+
+    public function academicTutor(): HasOne
+    {
+        return $this->hasOne(AcademicTutor::class, 'user_id');
+    }
+
+    public function managedCareers(): HasMany
+    {
+        return $this->hasMany(Career::class, 'director_id');
+    }
+
+    public function reportedIncidents(): HasMany
+    {
+        return $this->hasMany(Incident::class, 'reported_by_user_id');
+    }
+
+    public function reviewedIncidents(): HasMany
+    {
+        return $this->hasMany(Incident::class, 'reviewed_by_user_id');
+    }
+
+    public function permissionOverrides(): HasMany
+    {
+        return $this->hasMany(UserPermissionOverride::class, 'users_id');
     }
 
     public function addresses(): HasMany
     {
         return $this->hasMany(Address::class, 'users_id');
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('active', true);
+    }
+
+    public function scopeVerified(Builder $query): Builder
+    {
+        return $query->whereNotNull('verified_at');
+    }
+
+    public function scopeByRole(Builder $query, string $role): Builder
+    {
+        return $query->whereHas('role', fn (Builder $roleQuery) => $roleQuery->where('name', $role));
     }
 }

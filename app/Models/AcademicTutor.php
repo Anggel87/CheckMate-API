@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * Academic tutor: teacher assigned to follow up one or more groups.
  *
  * @property int $id
- * @property int $teacher_id
+ * @property int $user_id
  * @property bool $is_active
  */
 class AcademicTutor extends Model
@@ -21,7 +21,7 @@ class AcademicTutor extends Model
     use HasFactory;
 
     protected $fillable = [
-        'teacher_id',
+        'user_id',
         'is_active',
     ];
 
@@ -32,9 +32,9 @@ class AcademicTutor extends Model
         ];
     }
 
-    public function teacher(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Teacher::class, 'teacher_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function groups(): BelongsToMany

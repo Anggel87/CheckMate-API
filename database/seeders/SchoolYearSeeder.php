@@ -13,14 +13,14 @@ class SchoolYearSeeder extends Seeder
             'name' => '2024-2025',
             'start_date' => '2024-08-01',
             'end_date' => '2025-06-30',
-            'status' => 'FINISHED',
+            'status' => 'FINALIZADO',
         ]);
 
         SchoolYear::create([
             'name' => '2025-2026',
             'start_date' => '2025-08-01',
             'end_date' => '2026-06-30',
-            'status' => 'ACTIVE',
+            'status' => 'ACTIVO',
         ]);
     }
 }

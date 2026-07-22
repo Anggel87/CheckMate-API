@@ -12,14 +12,18 @@ return new class extends Migration
             $table->mediumIncrements('id');
             $table->unsignedInteger('attendance_id');
             $table->foreign('attendance_id')->references('id')->on('attendances')->cascadeOnDelete();
-            $table->unsignedMediumInteger('reviewed_by_user_id');
-            $table->foreign('reviewed_by_user_id')->references('id')->on('users')->restrictOnDelete();
+            $table->unsignedMediumInteger('tutor_id');
+            $table->foreign('tutor_id')->references('id')->on('users')->cascadeOnDelete();
+            $table->unsignedMediumInteger('director_id');
+            $table->foreign('director_id')->references('id')->on('users')->restrictOnDelete();
             $table->string('description', 255);
             $table->string('evidence', 255)->nullable();
-            $table->enum('status', ['PENDING', 'ACCEPTED', 'REJECTED'])->default('PENDING')->index();
+            $table->enum('status', ['PENDIENTE', 'ACEPTADO', 'RECHAZADO'])->default('PENDIENTE')->index();
             $table->timestamps();
 
             $table->index('attendance_id');
+            $table->index('tutor_id');
+            $table->index('director_id');
         });
     }
 
