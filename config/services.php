@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'governance' => [
+        'base_url' => env('GOVERNANCE_BASE_URL', 'http://localhost:8001/api/v1'),
+        'popup_url' => env('GOVERNANCE_POPUP_URL', 'http://localhost:8001/governance/auth'),
+        'client_id' => env('GOVERNANCE_CLIENT_ID'),
+        'client_secret' => env('GOVERNANCE_CLIENT_SECRET'),
+        'auth_cache_ttl' => env('GOVERNANCE_AUTH_CACHE_TTL', 120),
+    ],
+
 ];

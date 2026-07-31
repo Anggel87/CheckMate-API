@@ -3,6 +3,13 @@
 > Checklist de módulos, tareas, estado y notas de desarrollo.
 > Estados: ✅ Completo | 🔄 En progreso | ⏳ Pendiente | 🐛 Bug / Incompleto | ⚠️ Revisar
 
+> ⚠️ **`CLAUDE_CONTEXT.md` es la fuente de verdad técnica actual** (esquema, endpoints,
+> catálogo de errores). Varias secciones de este tracker (nombres de rol, tablas
+> `teachers`/`students`/`directors` separadas, endpoints en `mis-` en vez de recursos
+> REST) quedaron desactualizadas respecto al modelo RBAC puro ya migrado. Antes de dar
+> por buena una fila de aquí, verifica contra `CLAUDE_CONTEXT.md` y el esquema real con
+> la herramienta `database-schema` de Boost.
+
 ---
 
 ## Convenio de nombres — TODO EN INGLÉS (código) / ESPAÑOL (rutas y respuestas API)
@@ -196,15 +203,31 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 
 ## Módulo 8 — Panel alumno
 
+> Reemplaza la tabla anterior (obsoleta): implementado según `CLAUDE_CONTEXT.md` §8.3,
+> no según el borrador original de este tracker.
+
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 8.1 | `GET /alumno/mis-asistencias` | ⏳ | |
-| 8.2 | `GET /alumno/mis-reclamos` | ⏳ | |
-| 8.3 | `POST /alumno/reclamos` | ⏳ | |
-| 8.4 | Migración `reclamos` | ⏳ | |
-| 8.5 | Modelo `Reclamo` | ⏳ | |
-| 8.6 | `ClaimService` | ⏳ | |
-| 8.7 | Notificaciones del alumno | ⏳ | |
+| 8.1 | `governance_user_id` en `users` + middleware `governance.auth`/`role` | ✅ | `ResolveGovernanceUser`, `EnsureUserHasRole`. Ver `GOVERNANCE_AUTH.md`. `GET /auth/me` se cachea por token (`GOVERNANCE_AUTH_CACHE_TTL`, default 120s) para no llamar a gobernanza en cada request |
+| 8.2 | `ApiException` + render de `ValidationException` (VAL01) | ✅ | `app/Exceptions/ApiException.php`, `bootstrap/app.php` |
+| 8.3 | `GET /api/v1/alumno/profile` | ✅ | `ProfileController` |
+| 8.4 | `GET\|POST /api/v1/alumno/claims`, `GET /api/v1/alumno/claims/{id}` | ✅ | `ClaimController`. PERM02 si la materia no es del alumno |
+| 8.5 | `GET /api/v1/alumno/justifications[/{id}]` | ✅ | `JustificationController` |
+| 8.6 | `POST /api/v1/alumno/subjects/{id}/attendance/{aid}/justify` | ✅ | `JustifyAttendanceService` (ATT03/ATT04/JUST03) |
+| 8.7 | `GET /api/v1/alumno/subjects[/{id}][/attendance]` | ✅ | `SubjectController`, `ScheduleFormatter` |
+| 8.8 | Tests Pest (`tests/Feature/Alumno/*`) | ✅ | 21 tests, `Http::fake()` simula `GET {governance}/auth/me` |
+| 8.9 | Aprobación de justificantes (tutor académico, §8.2) | ⏳ | Requiere agregar `reviewed_by`/`comment` a `justifications` |
+| 8.10 | Comando `governance:link-students` | ✅ | Crea en gobernanza los alumnos sembrados sin `governance_user_id` y los enlaza. Opcional, no forma parte de `migrate:fresh --seed` porque requiere gobernanza corriendo |
+| 8.11 | `AttendanceSeeder` | ✅ | Sí forma parte de `migrate:fresh --seed` (no depende de servicios externos). Un horario por grupo, una sesión pasada por horario, asistencia por alumno del grupo (~20 registros totales, mezcla `PRESENTE`/`RETARDO`/`FALTA`) |
+
+**Limitaciones conocidas (ver plan de implementación para detalle):**
+- `claims.tutor_id` se usa como "quien presenta el reclamo" (el alumno mismo aquí); no
+  hay `attendance_id` en el body del `.md`, así que se toma la asistencia más reciente
+  del alumno en esa materia — revisar si el alumno familiar tutor comparte este flujo.
+- `justifications` no tiene columnas `reviewed_by`/`comment`; el detalle del alumno
+  siempre las devuelve en `null` hasta que se construya el módulo de aprobación.
+- No hay código de catálogo para "token de gobernanza válido sin usuario local
+  vinculado" (403 sin `error_code` en `ResolveGovernanceUser`).
 
 ---
 
@@ -291,3 +314,45 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 6. **relationship y receives_notifications en pivote** — Estos datos viven en `student_tutor`, no en `tutors`.
 7. **API responses** — Trait `ApiResponse` en todos los controladores.
 8. **Validaciones en español** — Todos los Form Requests con mensajes en español.
+
+---
+
+## Convención de trabajo por módulos
+
+A partir del Módulo 8 (Alumno), cada módulo nuevo se construye así:
+
+1. **Antes de codear:** leer la sección `§8.x` correspondiente en `CLAUDE_CONTEXT.md`
+   **y** verificar el esquema real con la herramienta `database-schema` de Boost. El
+   `.md` puede desactualizarse respecto a las migraciones (ya pasó con los nombres de
+   rol: el seeder usa `administrador`/`director_carrera`, el `.md` dice
+   `administrator`/`career_director`).
+2. **Rutas:** un archivo por módulo en `routes/api/{modulo}.php`, incluido desde
+   `routes/api.php` (que solo orquesta `require`s). Todas las rutas de negocio van bajo
+   `Route::prefix('v1')`; las rutas de prueba (`test/governance/...`) se quedan fuera de
+   `v1` en `routes/api/test.php`.
+3. **Controladores:** carpeta por módulo en `app/Http/Controllers/{Modulo}/`, un
+   controlador por agrupación de recursos del `.md` (no uno gigante por rol).
+4. **Compartido entre módulos** (middleware, `ApiException`, `GovernanceClient`,
+   helpers como `ScheduleFormatter`) vive en las carpetas raíz (`app/Http/Middleware`,
+   `app/Exceptions`, `app/Services/Governance`, `app/Support`), nunca duplicado por
+   módulo.
+5. **Requests** por módulo en `app/Http/Requests/{Modulo}/`. **Resources** compartidos
+   en la raíz de `app/Http/Resources/` (representan entidades, no vistas por rol, y se
+   reutilizan entre módulos que exponen el mismo dato, ej. `Claim`, `Justification`).
+6. **Servicios** solo cuando hay lógica de negocio real (validaciones encadenadas,
+   efectos secundarios), en `app/Services/{Modulo}/`. Si es una query simple, va
+   directo en el controlador.
+7. **Enums en las respuestas:** siempre el valor tal cual está en la BD (español:
+   `PRESENTE`, `PENDIENTE`, `ACTIVO`...), aunque los ejemplos ilustrativos de
+   `CLAUDE_CONTEXT.md` usen tokens en inglés.
+8. **Errores:** usar `ApiException::notFound()/forbidden()/conflict()/...` con el
+   código del catálogo (sección 7 de `CLAUDE_CONTEXT.md`) cuando exista uno; si no
+   existe un código para el caso, usar el status HTTP correcto sin forzar un código
+   incorrecto, y anotarlo como pendiente en este tracker.
+9. **Tests:** Pest en `tests/Feature/{Modulo}/`, uno por controlador. Usar
+   `fakeGovernanceAuth($user)` (helper en `tests/Pest.php`) para simular
+   `GET {governance}/auth/me` y autenticar como cualquier usuario local sin gobernanza
+   real corriendo. `RefreshDatabase` está activo globalmente para `tests/Feature`.
+10. Marcar las filas del módulo en este tracker conforme se completen, y anotar
+    limitaciones/supuestos (columnas faltantes, ambigüedades del `.md`) en una nota
+    dentro de la sección del módulo, no solo en el chat.

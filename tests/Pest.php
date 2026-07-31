@@ -11,8 +11,18 @@
 |
 */
 
-pest()->extend(Tests\TestCase::class)
- // ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+use App\Models\Career;
+use App\Models\Group;
+use App\Models\Schedule;
+use App\Models\SchoolYear;
+use App\Models\Subject;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
 
 /*
@@ -44,4 +54,55 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Fakes gobernanza's GET /auth/me so a request with "Authorization: Bearer {token}"
+ * resolves to the given local user via ResolveGovernanceUser middleware.
+ */
+function fakeGovernanceAuth(User $user, string $token = 'test-governance-token'): string
+{
+    Http::fake([
+        '*/auth/me' => Http::response([
+            'message' => 'Usuario autenticado.',
+            'data' => [
+                'user' => [
+                    'id' => $user->governance_user_id,
+                    'name' => $user->fullName(),
+                    'email' => $user->email,
+                    'role' => $user->role->name,
+                ],
+            ],
+        ], 200),
+    ]);
+
+    return $token;
+}
+
+/**
+ * Creates a Group tied to an ACTIVO school year, ready to enroll a student in.
+ */
+function makeActiveGroup(): Group
+{
+    $schoolYear = SchoolYear::factory()->active()->create();
+    $career = Career::factory()->create();
+
+    return Group::factory()->create([
+        'school_year_id' => $schoolYear->id,
+        'career_id' => $career->id,
+    ]);
+}
+
+/**
+ * Creates an active Schedule (subject + teacher + classroom) for the given group,
+ * within its ACTIVO school year.
+ */
+function makeActiveSchedule(Group $group, ?Subject $subject = null): Schedule
+{
+    return Schedule::factory()->create([
+        'school_year_id' => $group->school_year_id,
+        'group_id' => $group->id,
+        'subject_id' => ($subject ?? Subject::factory()->create())->id,
+        'is_active' => true,
+    ]);
 }

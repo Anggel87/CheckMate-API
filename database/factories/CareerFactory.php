@@ -27,7 +27,7 @@ class CareerFactory extends Factory
         return [
             'name' => $career['name'],
             'short_name' => $career['short'],
-            'code' => $career['code'].'-'.fake()->numberBetween(1, 9),
+            'code' => $career['code'].'-'.fake()->unique()->numberBetween(1, 999),
             'is_active' => true,
             'director_id' => User::factory()->careerDirector(),
         ];
