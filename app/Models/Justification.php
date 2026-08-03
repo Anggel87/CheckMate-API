@@ -15,6 +15,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $file
  * @property Carbon $justified_at
  * @property string $status
+ * @property int|null $reviewed_by_user_id
+ * @property Carbon|null $reviewed_at
+ * @property string|null $comment
  */
 class Justification extends Model
 {
@@ -27,12 +30,16 @@ class Justification extends Model
         'file',
         'justified_at',
         'status',
+        'reviewed_by_user_id',
+        'reviewed_at',
+        'comment',
     ];
 
     protected function casts(): array
     {
         return [
             'justified_at' => 'datetime',
+            'reviewed_at' => 'datetime',
         ];
     }
 
@@ -44,5 +51,10 @@ class Justification extends Model
     public function justifiedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'justified_by_user_id');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by_user_id');
     }
 }

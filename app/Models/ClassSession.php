@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $schedule_id
+ * @property Carbon $date
  * @property int $teacher_id
  * @property int $device_id
  * @property Carbon $opened_at
@@ -25,6 +26,7 @@ class ClassSession extends Model
 
     protected $fillable = [
         'schedule_id',
+        'date',
         'teacher_id',
         'device_id',
         'opened_at',
@@ -37,6 +39,7 @@ class ClassSession extends Model
     protected function casts(): array
     {
         return [
+            'date' => 'date',
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
             'is_active' => 'boolean',

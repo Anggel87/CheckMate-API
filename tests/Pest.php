@@ -11,13 +11,18 @@
 |
 */
 
+use App\Models\AcademicTutor;
 use App\Models\Career;
+use App\Models\Classroom;
+use App\Models\ClassSession;
+use App\Models\Device;
 use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\SchoolYear;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -103,6 +108,64 @@ function makeActiveSchedule(Group $group, ?Subject $subject = null): Schedule
         'school_year_id' => $group->school_year_id,
         'group_id' => $group->id,
         'subject_id' => ($subject ?? Subject::factory()->create())->id,
+        'is_active' => true,
+    ]);
+}
+
+/**
+ * Creates a teacher with an active Schedule for the given (or a new) active Group.
+ *
+ * @return array{teacher: User, group: Group, schedule: Schedule}
+ */
+function makeTeacherWithSchedule(?Group $group = null, ?Subject $subject = null, int $governanceUserId = 1): array
+{
+    $group ??= makeActiveGroup();
+    $classroom = Classroom::factory()->create();
+
+    $teacher = User::factory()->teacher()->create(['governance_user_id' => $governanceUserId]);
+
+    $schedule = Schedule::factory()->create([
+        'school_year_id' => $group->school_year_id,
+        'group_id' => $group->id,
+        'teacher_id' => $teacher->id,
+        'subject_id' => ($subject ?? Subject::factory()->create())->id,
+        'classroom_id' => $classroom->id,
+        'is_active' => true,
+    ]);
+
+    return ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule];
+}
+
+/**
+ * Creates an academic tutor actively assigned to the given Group.
+ */
+function makeTutorForGroup(Group $group, int $governanceUserId = 1): User
+{
+    $tutor = User::factory()->academicTutor()->create(['governance_user_id' => $governanceUserId]);
+    $academicTutor = AcademicTutor::factory()->create(['user_id' => $tutor->id]);
+    $academicTutor->groups()->attach($group->id, ['is_active' => true, 'assigned_at' => now()]);
+
+    return $tutor;
+}
+
+/**
+ * Opens a ClassSession for the given Schedule on the given date (defaults to today),
+ * with an active Device attached to the schedule's classroom.
+ */
+function makeOpenClassSession(Schedule $schedule, ?Carbon $date = null): ClassSession
+{
+    $date ??= now();
+
+    $device = Device::factory()->create(['classroom_id' => $schedule->classroom_id]);
+
+    return ClassSession::factory()->create([
+        'schedule_id' => $schedule->id,
+        'date' => $date->format('Y-m-d'),
+        'teacher_id' => $schedule->teacher_id,
+        'device_id' => $device->id,
+        'opened_at' => $date,
+        'closed_at' => null,
+        'status' => 'ABIERTA',
         'is_active' => true,
     ]);
 }

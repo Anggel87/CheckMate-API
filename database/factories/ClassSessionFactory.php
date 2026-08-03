@@ -24,6 +24,7 @@ class ClassSessionFactory extends Factory
 
         return [
             'schedule_id' => Schedule::factory(),
+            'date' => $openedAt->format('Y-m-d'),
             'teacher_id' => User::factory()->teacher(),
             'device_id' => Device::factory(),
             'opened_at' => $openedAt,

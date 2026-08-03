@@ -42,4 +42,9 @@ class AcademicTutor extends Model
         return $this->belongsToMany(Group::class, 'group_academic_tutor', 'academic_tutor_id', 'group_id')
             ->withPivot(['is_active', 'assigned_at']);
     }
+
+    public function activeGroups(): BelongsToMany
+    {
+        return $this->groups()->wherePivot('is_active', true);
+    }
 }

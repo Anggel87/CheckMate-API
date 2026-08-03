@@ -11,4 +11,6 @@ require __DIR__.'/api/test.php';
 
 Route::prefix('v1')->group(function () {
     require __DIR__.'/api/alumno.php';
+    require __DIR__.'/api/profesor.php';
+    require __DIR__.'/api/tutor.php';
 });

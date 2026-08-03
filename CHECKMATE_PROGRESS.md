@@ -187,17 +187,46 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 
 ---
 
-## Módulo 7 — Panel docente
+## Módulo 7 — Profesor y Tutor Académico
+
+> Reemplaza la tabla anterior (obsoleta): implementado según `CLAUDE_CONTEXT.md` §8.1
+> (Profesor) y §8.2 (Tutor Académico), no según el borrador original de este tracker.
+> El tutor académico reutiliza los controladores de Profesor vía middleware
+> `role:profesor,tutor_academico`; solo sus 3 endpoints exclusivos viven bajo `/tutor`.
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 7.1 | `GET /docente/mis-horarios` | ⏳ | |
-| 7.2 | `GET /docente/clase-activa` | ⏳ | |
-| 7.3 | `GET /docente/horarios/{id}/asistencias-hoy` | ⏳ | |
-| 7.4 | `POST /docente/asistencias/{id}/justificar` | ⏳ | |
-| 7.5 | `JustificationService` | ⏳ | Cambia estado a JUSTIFICADA |
-| 7.6 | Migración `justificaciones` | ⏳ | |
-| 7.7 | Modelo `Justificacion` | ⏳ | |
+| 7.1 | Migraciones nuevas: `justifications.reviewed_by_user_id/reviewed_at/comment`, `claims.action_by_user_id/action_at/comment` + `claims.status` ampliado, `class_sessions.date` + único `(schedule_id, date)` | ✅ | `claims.status` pasó de ENUM a `string(20)` para poder ampliar valores sin `doctrine/dbal` (no instalado) ni SQL no portable entre MySQL/SQLite; ver migraciones `2026_08_03_*` |
+| 7.2 | `GET /api/v1/profesor/groups`, `GET /api/v1/profesor/groups/{id}/students` | ✅ | `GroupController` |
+| 7.3 | `GET /api/v1/profesor/students/{id}[/attendance][/justifications]` | ✅ | `StudentController`. Asistencia y justificantes se filtran también por `schedule.teacher_id` (el profesor no ve materias que no imparte a ese alumno) |
+| 7.4 | `GET /api/v1/profesor/schedule/today`, `GET /api/v1/profesor/schedule` | ✅ | `ScheduleController`, `Support\DayOfWeek` |
+| 7.5 | `POST /api/v1/profesor/sessions/open[/{id}/nfc][/{id}/students/{sid}][/{id}/close]` | ✅ | `SessionController` + `OpenClassSessionService`/`RegisterNfcAttendanceService`/`CloseClassSessionService`. Tolerancia PRESENTE/RETARDO calculada contra `attendance_settings` (default 10/30 min si no hay fila) |
+| 7.6 | `GET/POST/PUT /api/v1/profesor/incidents[...]`, `PATCH .../students` | ✅ | `IncidentController`. `IncidentFactory` nuevo (no existía) |
+| 7.7 | `GET /api/v1/profesor/claims[/{id}]` (solo lectura) | ✅ | `ClaimController` |
+| 7.8 | `GET/PATCH /api/v1/tutor/claims[...]`, `PATCH /api/v1/tutor/students/{id}/justifications/{jid}` | ✅ | `Tutor\ClaimController`, `Tutor\JustificationController` + `Services\Tutor\*`. Aprobar un justificante sincroniza `attendance.status = JUSTIFICADA` |
+| 7.9 | Tests Pest (`tests/Feature/Profesor/*`, `tests/Feature/Tutor/*`) | ✅ | 40 tests nuevos (61 en la suite completa junto con Alumno). Helpers nuevos en `tests/Pest.php`: `makeTeacherWithSchedule()`, `makeTutorForGroup()`, `makeOpenClassSession()` |
+
+**Limitaciones conocidas:**
+- **Notificaciones automáticas al cerrar sesión** (regla de negocio §9.7 del `.md`: avisar a
+  tutores familiares cuando un alumno queda `FALTA`) no están implementadas — el Módulo 10
+  (Tutores y Notificaciones) todavía no existe. `CloseClassSessionService` sí marca `FALTA`
+  correctamente, solo no dispara el aviso.
+- **`incidents.schedule_id` es NOT NULL pero `POST /profesor/incidents` no recibe un
+  `schedule_id`** en el `.md` (un incidente puede afectar a varios `group_ids`). Se usa como
+  ancla el horario activo del profesor en el primer grupo indicado (o cualquier horario
+  activo suyo si no manda `group_ids`). Revisar si el modelo de datos debería permitir
+  incidentes sin horario o con múltiples horarios.
+- **`incidents.reviewed_by_user_id` es NOT NULL** pero conceptualmente se llena cuando
+  alguien *revisa* el incidente, no al crearlo. Se inicializa con el propio reportero hasta
+  que exista un flujo de revisión (Director de Carrera, §8.5) que lo reasigne.
+- **SES01 (sesión duplicada) se garantiza con un índice único `(schedule_id, date)`** en vez
+  de solo estados `ABIERTA/CERRADA` — significa que si una sesión se cancela (`CANCELADA`)
+  no se puede abrir otra el mismo día para ese horario sin intervención manual.
+- **`claims.tutor_id` sigue guardando al alumno que reclama**, no un tutor familiar (mismo
+  supuesto ya documentado en el Módulo 8/Alumno). Las vistas de Profesor/Tutor lo exponen
+  como `student`, no como `tutor`.
+- **`TutorClaimResource.history` siempre es `[]`**: no existe una tabla de auditoría de
+  acciones sobre reclamos, solo la última acción (`action_by_user_id`/`action_at`/`comment`).
 
 ---
 

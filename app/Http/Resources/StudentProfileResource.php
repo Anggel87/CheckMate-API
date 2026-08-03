@@ -23,6 +23,7 @@ class StudentProfileResource extends JsonResource
             'email' => $this->email,
             'phone' => $this->phone,
             'birth_date' => $this->birth_date?->format('Y-m-d'),
+            'gender' => $this->gender,
             'photo' => $this->photo,
             'group' => $this->whenLoaded('group', fn () => [
                 'id' => $this->group->id,

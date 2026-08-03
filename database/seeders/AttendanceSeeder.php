@@ -66,6 +66,7 @@ class AttendanceSeeder extends Seeder
 
         $classSession = ClassSession::create([
             'schedule_id' => $schedule->id,
+            'date' => $date->format('Y-m-d'),
             'teacher_id' => $schedule->teacher_id,
             'device_id' => $device->id,
             'opened_at' => $openedAt,
