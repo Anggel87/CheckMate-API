@@ -138,6 +138,35 @@ test('rejects justifying an attendance that already has a justification', functi
     $response->assertStatus(409)->assertJsonPath('error_code', 'JUST03');
 });
 
+test('shows the real reviewer and comment once a tutor reviews the justification', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $tutor = makeTutorForGroup($group, 2);
+
+    $justification = Justification::factory()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $student->id]),
+    ]);
+
+    // Tokens distintos: el cache de ResolveGovernanceUser guarda por token, y ambos
+    // usuarios necesitan resolver a identidades distintas dentro del mismo test.
+    $tutorToken = fakeGovernanceAuth($tutor, 'tutor-token');
+
+    $this->patchJson(
+        "/api/v1/tutor/students/{$student->id}/justifications/{$justification->id}",
+        ['status' => 'ACEPTADO', 'comment' => 'Justificante válido.'],
+        ['Authorization' => "Bearer {$tutorToken}"]
+    )->assertOk();
+
+    $studentToken = fakeGovernanceAuth($student, 'student-token');
+
+    $response = $this->getJson("/api/v1/alumno/justifications/{$justification->id}", ['Authorization' => "Bearer {$studentToken}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.status', 'ACEPTADO')
+        ->assertJsonPath('data.reviewed_by.id', $tutor->id)
+        ->assertJsonPath('data.comment', 'Justificante válido.');
+});
+
 test('rejects justifying an attendance that does not exist', function () {
     Storage::fake('public');
 

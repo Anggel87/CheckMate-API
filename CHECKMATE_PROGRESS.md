@@ -146,15 +146,24 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 
 ## Módulo 4 — Autenticación
 
+> Reemplaza la tabla anterior (obsoleta): esta app **no tiene login propio ni Sanctum**.
+> La identidad vive en gobernanza (ver `GOVERNANCE_AUTH.md`); este módulo es el puente
+> hacia ella, no un sistema de auth independiente.
+
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 4.1 | `AuthController` (login, logout, me) | ⏳ | Sanctum. Verificar is_active al login |
-| 4.2 | Form Request `LoginRequest` | ⏳ | Validaciones en español |
-| 4.3 | Resource `UserResource` | ⏳ | No exponer password ni remember_token |
-| 4.4 | Rutas `/api/v1/auth/*` | ⏳ | |
-| 4.5 | Middleware `active.user` | ⏳ | Bloquear usuarios con is_active = false |
-| 4.6 | Middleware `role` | ⏳ | Restricción por rol, ej: role:ADMIN,DOCENTE |
-| 4.7 | Tests de autenticación | ⏳ | Login exitoso, login inactivo, token inválido |
+| 4.1 | `Auth\AuthController` (createUser, login, popup, callback) | ✅ | Antes vivía en `Controllers/Test/GovernanceTestController`, promovido a oficial |
+| 4.2 | `POST /api/v1/auth/users` | ✅ | Crea la identidad en gobernanza (`POST {governance}/internal/users`) |
+| 4.3 | `POST /api/v1/auth/login` | ✅ | Proxy a `POST {governance}/auth/login`. Evita exponer `X-Client-Secret` en el frontend |
+| 4.4 | `GET /auth/popup`, `GET /auth/callback` | ✅ | En `routes/web.php`, fuera de `/api/v1` — el navegador navega directo, no son llamadas JSON. `redirect_uri` default = `GOVERNANCE_WEB_CALLBACK_URL`, debe coincidir exacto con `CHECKMATE_WEB_CALLBACK_URL` del `.env` de gobernanza o gobernanza rechaza con "acceso no autorizado" |
+| 4.5 | `governance.auth` (`ResolveGovernanceUser`) + `role` (`EnsureUserHasRole`) | ✅ | Construidos como parte del Módulo 8 (Alumno), documentados ahí. Se usan en todos los módulos protegidos |
+| 4.6 | Tests de Auth | ⏳ | Los middleware sí están cubiertos indirectamente por los tests de Alumno/Profesor/Tutor; falta un `tests/Feature/Auth/*` que pruebe `AuthController` en sí (createUser/login contra gobernanza mockeada) |
+
+**Pendiente/riesgo a revisar:** `POST /api/v1/auth/users` no tiene ninguna protección —
+cualquiera puede crear identidades en gobernanza llamando a este endpoint. Cuando se
+construya el flujo real de "un admin crea un profesor/alumno/director", hay que decidir
+si este endpoint se protege (ej. solo `role:administrator`) o si se vuelve interno y las
+altas de actores lo llaman desde dentro de la app, no como endpoint público.
 
 ---
 
@@ -245,7 +254,7 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 | 8.6 | `POST /api/v1/alumno/subjects/{id}/attendance/{aid}/justify` | ✅ | `JustifyAttendanceService` (ATT03/ATT04/JUST03) |
 | 8.7 | `GET /api/v1/alumno/subjects[/{id}][/attendance]` | ✅ | `SubjectController`, `ScheduleFormatter` |
 | 8.8 | Tests Pest (`tests/Feature/Alumno/*`) | ✅ | 21 tests, `Http::fake()` simula `GET {governance}/auth/me` |
-| 8.9 | Aprobación de justificantes (tutor académico, §8.2) | ⏳ | Requiere agregar `reviewed_by`/`comment` a `justifications` |
+| 8.9 | Aprobación de justificantes (tutor académico, §8.2) | ✅ | Migración y flujo de aprobación se construyeron en el Módulo 7 (`Tutor\JustificationController`). `JustificationResource` de Alumno actualizado para mostrar `reviewed_by`/`reviewed_at`/`comment` reales (antes los devolvía hardcodeados en `null`) |
 | 8.10 | Comando `governance:link-students` | ✅ | Crea en gobernanza los alumnos sembrados sin `governance_user_id` y los enlaza. Opcional, no forma parte de `migrate:fresh --seed` porque requiere gobernanza corriendo |
 | 8.11 | `AttendanceSeeder` | ✅ | Sí forma parte de `migrate:fresh --seed` (no depende de servicios externos). Un horario por grupo, una sesión pasada por horario, asistencia por alumno del grupo (~20 registros totales, mezcla `PRESENTE`/`RETARDO`/`FALTA`) |
 
@@ -253,10 +262,14 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 - `claims.tutor_id` se usa como "quien presenta el reclamo" (el alumno mismo aquí); no
   hay `attendance_id` en el body del `.md`, así que se toma la asistencia más reciente
   del alumno en esa materia — revisar si el alumno familiar tutor comparte este flujo.
-- `justifications` no tiene columnas `reviewed_by`/`comment`; el detalle del alumno
-  siempre las devuelve en `null` hasta que se construya el módulo de aprobación.
 - No hay código de catálogo para "token de gobernanza válido sin usuario local
   vinculado" (403 sin `error_code` en `ResolveGovernanceUser`).
+- `fakeGovernanceAuth()` en `tests/Pest.php` ahora guarda un registro token→usuario en
+  el contenedor en vez de que cada llamada pise la anterior. Llamarlo varias veces en un
+  mismo test (para simular dos roles distintos, ej. tutor revisa → alumno lee) requiere
+  pasar un `$token` distinto cada vez; con el mismo token siempre resuelve al último
+  usuario registrado para ese token, tal como lo haría el cache real de
+  `ResolveGovernanceUser`.
 
 ---
 
@@ -356,9 +369,11 @@ A partir del Módulo 8 (Alumno), cada módulo nuevo se construye así:
    rol: el seeder usa `administrador`/`director_carrera`, el `.md` dice
    `administrator`/`career_director`).
 2. **Rutas:** un archivo por módulo en `routes/api/{modulo}.php`, incluido desde
-   `routes/api.php` (que solo orquesta `require`s). Todas las rutas de negocio van bajo
-   `Route::prefix('v1')`; las rutas de prueba (`test/governance/...`) se quedan fuera de
-   `v1` en `routes/api/test.php`.
+   `routes/api.php` (que solo orquesta `require`s), todo bajo `Route::prefix('v1')`. Las
+   rutas que el navegador navega directo (no llamadas JSON, ej. el popup/callback de
+   gobernanza) van en `routes/web.php`, fuera de `/api`, porque su URL debe coincidir
+   exacto con algo configurado externamente (ver `auth.popup`/`auth.callback` y la nota
+   sobre `CHECKMATE_WEB_CALLBACK_URL` en `GOVERNANCE_AUTH.md`).
 3. **Controladores:** carpeta por módulo en `app/Http/Controllers/{Modulo}/`, un
    controlador por agrupación de recursos del `.md` (no uno gigante por rol).
 4. **Compartido entre módulos** (middleware, `ApiException`, `GovernanceClient`,

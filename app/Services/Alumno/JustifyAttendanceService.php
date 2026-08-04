@@ -41,6 +41,6 @@ class JustifyAttendanceService
             'status' => 'PENDIENTE',
         ]);
 
-        return $justification->load('attendance.schedule.subject');
+        return $justification->load('attendance.schedule.subject', 'reviewedBy');
     }
 }

@@ -64,21 +64,41 @@ function something()
 /**
  * Fakes gobernanza's GET /auth/me so a request with "Authorization: Bearer {token}"
  * resolves to the given local user via ResolveGovernanceUser middleware.
+ *
+ * Calling this multiple times in the same test registers multiple token => user
+ * mappings (kept in the container, which Laravel resets per test) instead of each
+ * call silently overriding the previous one — needed for tests where two different
+ * roles act in the same test (e.g. a tutor reviews something, then the student reads
+ * it back).
  */
 function fakeGovernanceAuth(User $user, string $token = 'test-governance-token'): string
 {
+    $registry = app()->bound('governance.test.registry') ? app('governance.test.registry') : [];
+
+    $registry[$token] = [
+        'id' => $user->governance_user_id,
+        'name' => $user->fullName(),
+        'email' => $user->email,
+        'role' => $user->role->name,
+    ];
+
+    app()->instance('governance.test.registry', $registry);
+
     Http::fake([
-        '*/auth/me' => Http::response([
-            'message' => 'Usuario autenticado.',
-            'data' => [
-                'user' => [
-                    'id' => $user->governance_user_id,
-                    'name' => $user->fullName(),
-                    'email' => $user->email,
-                    'role' => $user->role->name,
-                ],
-            ],
-        ], 200),
+        '*/auth/me' => function ($request) {
+            $header = $request->header('Authorization')[0] ?? '';
+            $token = str_starts_with($header, 'Bearer ') ? substr($header, 7) : $header;
+            $entry = (app('governance.test.registry'))[$token] ?? null;
+
+            if ($entry === null) {
+                return Http::response(['message' => 'No autenticado.'], 401);
+            }
+
+            return Http::response([
+                'message' => 'Usuario autenticado.',
+                'data' => ['user' => $entry],
+            ], 200);
+        },
     ]);
 
     return $token;

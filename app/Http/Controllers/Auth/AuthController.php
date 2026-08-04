@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Test;
+namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\Governance\GovernanceClient;
@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
-class GovernanceTestController extends Controller
+class AuthController extends Controller
 {
     public function __construct(protected GovernanceClient $governance) {}
 
@@ -36,13 +36,13 @@ class GovernanceTestController extends Controller
         return response()->json($this->governance->login(
             $data['email'],
             $data['password'],
-            $data['device_name'] ?? 'insomnia-test',
+            $data['device_name'] ?? 'checkmate-api',
         ));
     }
 
     public function popup(Request $request): RedirectResponse
     {
-        $redirectUri = $request->query('redirect_uri', route('test.governance.callback'));
+        $redirectUri = $request->query('redirect_uri', config('services.governance.web_callback_url'));
 
         $url = config('services.governance.popup_url').'?'.http_build_query([
             'client_id' => config('services.governance.client_id'),

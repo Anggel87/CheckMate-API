@@ -41,6 +41,9 @@ return [
         'client_id' => env('GOVERNANCE_CLIENT_ID'),
         'client_secret' => env('GOVERNANCE_CLIENT_SECRET'),
         'auth_cache_ttl' => env('GOVERNANCE_AUTH_CACHE_TTL', 120),
+        // Debe coincidir EXACTO con CHECKMATE_WEB_CALLBACK_URL del .env de gobernanza,
+        // que valida el redirect_uri contra ese valor y rechaza cualquier otro.
+        'web_callback_url' => env('GOVERNANCE_WEB_CALLBACK_URL', 'http://localhost:8000/auth/callback'),
     ],
 
 ];
