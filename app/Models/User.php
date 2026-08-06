@@ -86,6 +86,33 @@ class User extends Authenticatable
         return $this->role->name === $roleName;
     }
 
+    /**
+     * Permisos efectivos: los de los permission_groups del rol, mas los
+     * overrides individuales (PERMITIR agrega, DENEGAR quita).
+     *
+     * @return list<string>
+     */
+    public function effectivePermissions(): array
+    {
+        $rolePermissions = $this->role
+            ->permissionGroups()
+            ->with('permissions')
+            ->get()
+            ->flatMap(fn (PermissionGroup $group) => $group->permissions)
+            ->filter(fn (Permission $permission) => $permission->is_active)
+            ->pluck('key_name');
+
+        $overrides = $this->permissionOverrides()->with('permission')->get();
+
+        $allowed = $rolePermissions->merge(
+            $overrides->where('type', 'PERMITIR')->pluck('permission.key_name')
+        );
+
+        $denied = $overrides->where('type', 'DENEGAR')->pluck('permission.key_name');
+
+        return $allowed->diff($denied)->unique()->values()->all();
+    }
+
     // ─── Relations ───────────────────────────────────────────────────────────
 
     public function role(): BelongsTo
