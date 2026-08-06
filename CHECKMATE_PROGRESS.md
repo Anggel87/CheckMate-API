@@ -167,16 +167,17 @@ altas de actores lo llaman desde dentro de la app, no como endpoint público.
 
 ---
 
-## Módulo 5 — Dispositivos Raspberry Pi 4B
+## Módulo 5 — Dispositivos ESP32
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 5.1 | Migración `dispositivos` | ⏳ | api_token_hash, mac_address único, aula_id |
-| 5.2 | Modelo `Dispositivo` | ⏳ | |
-| 5.3 | `DispositivoController` | ⏳ | CRUD + regenerar token |
-| 5.4 | `DeviceAuthService` | ⏳ | Validar token hash + MAC + activo |
-| 5.5 | Middleware `device.auth` | ⏳ | Para rutas usadas por Raspberry |
-| 5.6 | Endpoint `POST /device/heartbeat` | ⏳ | Actualiza ultimo_contacto_at |
+| 5.1 | Migración `dispositivos` | ✅ | Ya existía desde la base del esquema como `devices` (`mac_address`, `ip`, `is_active`, `classroom_id`) |
+| 5.2 | Modelo `Dispositivo` | ✅ | `App\Models\Device` |
+| 5.3 | `DispositivoController` (CRUD admin) | ⏳ | Pertenece al rol Administrador (§8.4/Módulo 14), no construido aún |
+| 5.4 | `DeviceAuthService` (token + MAC) | ❌ | **Descartado a propósito.** El usuario decidió, para este prototipo, que el endpoint que usa el ESP32 no lleve ninguna autenticación (ahorra tiempo/hardware). El device se identifica solo con su `mac_address` en el body. Ver 6.10 |
+| 5.5 | Middleware `device.auth` | ❌ | Mismo motivo que 5.4 — no aplica, el endpoint del ESP32 es público a propósito |
+| 5.6 | Endpoint `POST /device/heartbeat` | ⏳ | No pedido todavía, se agrega barato cuando haga falta |
+| 5.7 | Comando `device:register {mac_address} {classroom_id}` | ✅ | Alta/actualización rápida de un device real sin esperar al CRUD de admin (5.3). Mismo espíritu que `governance:link-students` |
 
 ---
 
@@ -184,15 +185,17 @@ altas de actores lo llaman desde dentro de la app, no como endpoint público.
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 6.1 | Migración `asistencias` | ⏳ | Índice único: alumno_id + horario_id + fecha |
-| 6.2 | Modelo `Asistencia` | ⏳ | Enum estado: PRESENTE, RETARDO, FALTA, JUSTIFICADA |
-| 6.3 | `AttendanceWindowService` | ⏳ | Calcula estado según configuración del horario |
-| 6.4 | `AttendanceRegistrationService` | ⏳ | Orquesta validación + registro + eventos |
-| 6.5 | `DeviceAttendanceController` | ⏳ | `POST /device/asistencias/nfc` |
-| 6.6 | Form Request `NfcAttendanceRequest` | ⏳ | |
-| 6.7 | Evento `AttendanceRegistered` | ⏳ | |
-| 6.8 | Listener `WriteAttendanceAuditLog` | ⏳ | |
-| 6.9 | Tests de flujo NFC | ⏳ | Presente, retardo, falta, duplicado, NFC no registrado |
+| 6.1 | Migración `asistencias` | ✅ | Ya existía como `attendances` (índice compuesto vía `class_session_id` + `student_id` validado en servicio, no en BD) |
+| 6.2 | Modelo `Asistencia` | ✅ | `App\Models\Attendance`. Enum estado: `PRESENTE`, `RETARDO`, `FALTA`, `JUSTIFICADA` |
+| 6.3 | `AttendanceWindowService` | ✅ | Lógica de tolerancia dentro de `Device\NfcTapService::resolveStatus()` (y, por separado, `Profesor\RegisterNfcAttendanceService::resolveStatus()` para el flujo de app) |
+| 6.4 | `AttendanceRegistrationService` | ✅ | `App\Services\Device\NfcTapService` |
+| 6.5 | `DeviceAttendanceController` | ✅ | `App\Http\Controllers\Device\NfcController` |
+| 6.6 | Form Request `NfcAttendanceRequest` | ✅ | `App\Http\Requests\Device\NfcTapRequest` |
+| 6.7 | Evento `AttendanceRegistered` | ⏳ | No construido — no hay listeners que lo necesiten todavía (notificaciones = Módulo 10, sin construir) |
+| 6.8 | Listener `WriteAttendanceAuditLog` | ⏳ | Depende de 6.7 y del Módulo 12 (Auditoría) |
+| 6.9 | Tests de flujo NFC | ✅ | `tests/Feature/Device/NfcTapTest.php` — 11 tests: abre sesión, re-tap (`SES01`), `PRESENTE`/`RETARDO`, `USR02`, `ATT02`, `ATT01`, `SES02`, `SES04`, `DEV01`, `DEV04` |
+| 6.10 | `POST /api/v1/device/nfc` — endpoint único, sin autenticación | ✅ | Un solo endpoint decide todo por el `nfc_uid`: si es el profesor del horario vigente en ese salón → abre la `class_session` (tolerancia cuenta desde `opened_at`, no desde `schedule.start_time`); si es un alumno → registra su asistencia contra la sesión ya abierta. Identificación del device por `mac_address` en el body, **sin token ni middleware** (decisión explícita del usuario para el prototipo — riesgo aceptado: cualquiera que conozca la MAC de un device real puede llamarlo). Código de error nuevo `SES04` (no está en el catálogo de `CLAUDE_CONTEXT.md`): "No hay una clase programada en este salón en este momento." No comparte código con `Profesor\RegisterNfcAttendanceService`/`OpenClassSessionService` (Módulo 7) — ese flujo de la app sigue intacto para cuando el profesor quiera pasar lista manualmente |
+| 6.11 | Cierre automático de sesiones | ✅ | El usuario descartó cerrar por un segundo tap del profesor (se le podría olvidar y la clase quedaría abierta). En su lugar: comando `class-sessions:auto-close` programado cada 5 min (`routes/console.php`, `Schedule::command(...)->everyFiveMinutes()`) que cierra toda `class_session` `ABIERTA` cuyo `schedule.end_time` ya pasó, reutilizando `CloseClassSessionService::closeSession()` (extraído del `close()` existente de Módulo 7 — mismo comportamiento: marca `FALTA` a quien no registró, conteos). **No manda notificaciones a tutores todavía** (Módulo 10 no existe) — tampoco lo hacía el cierre manual existente. Test: `tests/Feature/Console/AutoCloseClassSessionsTest.php` |
 
 ---
 
@@ -356,6 +359,12 @@ altas de actores lo llaman desde dentro de la app, no como endpoint público.
 6. **relationship y receives_notifications en pivote** — Estos datos viven en `student_tutor`, no en `tutors`.
 7. **API responses** — Trait `ApiResponse` en todos los controladores.
 8. **Validaciones en español** — Todos los Form Requests con mensajes en español.
+9. **`POST /api/v1/device/nfc` sin autenticación** — El ESP32 del aula no maneja login ni
+   tokens; se identifica solo con su `mac_address`. Decisión explícita del usuario para
+   este prototipo (ahorrar tiempo/recursos), riesgo aceptado. Ver Módulo 6, fila 6.10.
+10. **Tolerancia de asistencia por NFC cuenta desde `opened_at`, no desde
+    `schedule.start_time`** — Solo aplica al flujo de `Device\NfcTapService`; el flujo
+    de Profesor (Módulo 7, app) sigue usando `schedule.start_time` sin cambios.
 
 ---
 

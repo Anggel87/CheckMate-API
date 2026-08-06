@@ -24,6 +24,16 @@ class CloseClassSessionService
             throw ApiException::conflict('La sesión ya fue cerrada anteriormente.', 'SES03');
         }
 
+        return $this->closeSession($session);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function closeSession(ClassSession $session): array
+    {
+        $session->loadMissing('schedule.group');
+
         $students = $session->schedule->group->students()->active()->get();
         $registeredIds = Attendance::where('class_session_id', $session->id)->pluck('student_id');
 

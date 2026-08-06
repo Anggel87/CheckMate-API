@@ -21,6 +21,7 @@ use App\Models\Schedule;
 use App\Models\SchoolYear;
 use App\Models\Subject;
 use App\Models\User;
+use App\Support\DayOfWeek;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -188,4 +189,30 @@ function makeOpenClassSession(Schedule $schedule, ?Carbon $date = null): ClassSe
         'status' => 'ABIERTA',
         'is_active' => true,
     ]);
+}
+
+/**
+ * Creates a teacher with a Schedule + Device wired to the same classroom, with the
+ * schedule's day_of_week/start_time/end_time set so it's "in session" right now (or at
+ * the given moment) — ready to hit the unauthenticated device NFC endpoint
+ * (POST /api/v1/device/nfc), which resolves the current class purely from
+ * classroom + day + time window.
+ *
+ * @return array{teacher: User, group: Group, schedule: Schedule, device: Device}
+ */
+function makeScheduleCurrentlyInSession(?Carbon $now = null): array
+{
+    $now ??= Carbon::now();
+
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+
+    $schedule->update([
+        'day_of_week' => DayOfWeek::fromCarbon($now),
+        'start_time' => $now->copy()->subMinutes(5)->format('H:i:s'),
+        'end_time' => $now->copy()->addHour()->format('H:i:s'),
+    ]);
+
+    $device = Device::factory()->create(['classroom_id' => $schedule->classroom_id]);
+
+    return ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule, 'device' => $device];
 }
