@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\Tutor;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 
@@ -12,6 +13,9 @@ test('closes a class session whose schedule already ended and marks missing stud
 
     $registered = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
     $missing = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $tutor = Tutor::factory()->create();
+    $missing->tutors()->attach($tutor->id, ['relationship' => 'Madre', 'is_primary' => true, 'receives_notifications' => true]);
 
     Attendance::factory()->create([
         'class_session_id' => $session->id,
@@ -30,6 +34,11 @@ test('closes a class session whose schedule already ended and marks missing stud
         'student_id' => $missing->id,
         'status' => 'FALTA',
         'method' => 'SISTEMA',
+    ]);
+    $this->assertDatabaseHas('notifications', [
+        'student_id' => $missing->id,
+        'tutor_id' => $tutor->id,
+        'type' => 'INASISTENCIA',
     ]);
 });
 

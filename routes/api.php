@@ -19,4 +19,5 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/profesor.php';
     require __DIR__.'/api/tutor.php';
     require __DIR__.'/api/device.php';
+    require __DIR__.'/api/administrador.php';
 });

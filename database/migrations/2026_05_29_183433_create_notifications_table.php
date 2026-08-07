@@ -14,7 +14,7 @@ return new class extends Migration
             $table->foreign('student_id')->references('id')->on('users')->cascadeOnDelete();
             $table->unsignedMediumInteger('tutor_id');
             $table->foreign('tutor_id')->references('id')->on('tutors')->cascadeOnDelete();
-            $table->unsignedMediumInteger('user_id');
+            $table->unsignedMediumInteger('user_id')->nullable();
             $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
             $table->string('title', 90);
             $table->string('message', 350);

@@ -3,6 +3,7 @@
 use App\Models\Attendance;
 use App\Models\ClassSession;
 use App\Models\Device;
+use App\Models\Tutor;
 use App\Models\User;
 use App\Models\UserDetail;
 use Illuminate\Support\Str;
@@ -57,12 +58,15 @@ test('registers an on time attendance for a student tap within tolerance', funct
     $this->assertDatabaseHas('attendances', ['student_id' => $student->id, 'status' => 'PRESENTE', 'method' => 'NFC']);
 });
 
-test('registers a late attendance for a student tap beyond tolerance', function () {
+test('registers a late attendance for a student tap beyond tolerance and notifies their tutor', function () {
     ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule, 'device' => $device] = makeScheduleCurrentlyInSession();
     UserDetail::create(['user_id' => $teacher->id, 'nfc_uid' => 'AA:00:00:01', 'qr_uuid' => (string) Str::uuid()]);
 
     $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
     UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'BB:00:00:02', 'qr_uuid' => (string) Str::uuid()]);
+
+    $tutor = Tutor::factory()->create();
+    $student->tutors()->attach($tutor->id, ['relationship' => 'Madre', 'is_primary' => true, 'receives_notifications' => true]);
 
     $this->postJson('/api/v1/device/nfc', ['mac_address' => $device->mac_address, 'nfc_uid' => 'AA:00:00:01']);
     $session = ClassSession::where('schedule_id', $schedule->id)->firstOrFail();
@@ -74,6 +78,11 @@ test('registers a late attendance for a student tap beyond tolerance', function 
     ]);
 
     $response->assertCreated()->assertJsonPath('data.status', 'RETARDO');
+    $this->assertDatabaseHas('notifications', [
+        'student_id' => $student->id,
+        'tutor_id' => $tutor->id,
+        'type' => 'RETARDO',
+    ]);
 });
 
 test('rejects an unrecognized nfc card', function () {

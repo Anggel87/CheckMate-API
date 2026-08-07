@@ -9,11 +9,14 @@ use App\Models\Device;
 use App\Models\Schedule;
 use App\Models\User;
 use App\Models\UserDetail;
+use App\Services\NotificationService;
 use App\Support\DayOfWeek;
 use Illuminate\Support\Carbon;
 
 class NfcTapService
 {
+    public function __construct(protected NotificationService $notifications) {}
+
     public function handle(string $macAddress, string $nfcUid, ?string $scannedAtRaw): ClassSession|Attendance
     {
         $device = Device::where('mac_address', $macAddress)->first();
@@ -100,16 +103,23 @@ class NfcTapService
         }
 
         $scannedAt = $scannedAtRaw !== null ? Carbon::parse($scannedAtRaw) : $now;
+        $status = $this->resolveStatus($session, $scannedAt);
 
-        return Attendance::create([
+        $attendance = Attendance::create([
             'class_session_id' => $session->id,
             'student_id' => $student->id,
             'schedule_id' => $schedule->id,
             'devices_id' => $device->id,
             'registered_at' => $scannedAt,
-            'status' => $this->resolveStatus($session, $scannedAt),
+            'status' => $status,
             'method' => 'NFC',
         ]);
+
+        if ($status === 'RETARDO') {
+            $this->notifications->notifyLate($attendance);
+        }
+
+        return $attendance;
     }
 
     private function resolveStatus(ClassSession $session, Carbon $scannedAt): string

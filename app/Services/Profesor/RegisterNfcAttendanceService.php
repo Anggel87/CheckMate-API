@@ -7,10 +7,13 @@ use App\Models\Attendance;
 use App\Models\ClassSession;
 use App\Models\User;
 use App\Models\UserDetail;
+use App\Services\NotificationService;
 use Illuminate\Support\Carbon;
 
 class RegisterNfcAttendanceService
 {
+    public function __construct(protected NotificationService $notifications) {}
+
     public function register(User $teacher, int $sessionId, string $nfcUid, string $scannedAt): Attendance
     {
         $session = ClassSession::with('schedule.settings')->find($sessionId);
@@ -40,6 +43,7 @@ class RegisterNfcAttendanceService
         }
 
         $scannedAtCarbon = Carbon::parse($scannedAt);
+        $status = $this->resolveStatus($session, $scannedAtCarbon);
 
         $attendance = Attendance::create([
             'class_session_id' => $session->id,
@@ -47,9 +51,13 @@ class RegisterNfcAttendanceService
             'schedule_id' => $session->schedule_id,
             'devices_id' => $session->device_id,
             'registered_at' => $scannedAtCarbon,
-            'status' => $this->resolveStatus($session, $scannedAtCarbon),
+            'status' => $status,
             'method' => 'NFC',
         ]);
+
+        if ($status === 'RETARDO') {
+            $this->notifications->notifyLate($attendance);
+        }
 
         return $attendance->load('student');
     }

@@ -42,6 +42,20 @@ class Tutor extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::created(function (self $tutor) {
+            $tutor->notificationPreference()->create([
+                'absences' => true,
+                'lates' => true,
+                'incidents' => true,
+                'justifications' => true,
+                'claims' => true,
+                'announcements' => true,
+            ]);
+        });
+    }
+
     public function fullName(): string
     {
         return trim("{$this->first_name} {$this->first_surname} {$this->second_surname}");

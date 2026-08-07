@@ -278,12 +278,16 @@ altas de actores lo llaman desde dentro de la app, no como endpoint público.
 
 ## Módulo 9 — Generación automática de faltas
 
+> Cubierto funcionalmente por el Módulo 6 (NFC), con nombres distintos a los que
+> ilustraba este tracker — no hace falta construir nada adicional para lo que este
+> módulo describe.
+
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 9.1 | `AbsenceGenerationService` | ⏳ | |
-| 9.2 | Command `attendance:generate-absences` | ⏳ | Scheduler programado varias veces al día |
-| 9.3 | Evento `AbsenceGenerated` | ⏳ | |
-| 9.4 | Listener `NotifyTutorAboutAbsence` | ⏳ | |
+| 9.1 | `AbsenceGenerationService` | ✅ | Es `CloseClassSessionService::closeSession()` (`app/Services/Profesor/CloseClassSessionService.php`) — marca `FALTA` a quien no registró al cerrar una sesión |
+| 9.2 | Command `attendance:generate-absences` | ✅ | Es `class-sessions:auto-close` (Módulo 6.11), programado cada 5 min vía `Schedule::command()` en `routes/console.php` |
+| 9.3 | Evento `AbsenceGenerated` | ❌ | No se construyó como evento de Laravel — `NotificationService::notifyAbsence()` se llama directo desde `closeSession()`, sin capa de eventos/listeners de por medio (menos indirección para lo que hace falta hoy) |
+| 9.4 | Listener `NotifyTutorAboutAbsence` | ✅ | Es `NotificationService::notifyAbsence()` (Módulo 10), llamado directo sin listener |
 
 ---
 
@@ -291,11 +295,11 @@ altas de actores lo llaman desde dentro de la app, no como endpoint público.
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 10.1 | CRUD `tutores` | ⏳ | |
-| 10.2 | Migración `alumno_tutor` (pivote) | ⏳ | tipo_responsable, principal |
-| 10.3 | Migración `notificaciones` | ⏳ | |
-| 10.4 | Migración `preferencias_notificacion` | ⏳ | |
-| 10.5 | `NotificationService` | ⏳ | |
+| 10.1 | CRUD `tutores` | ⏳ | Pertenece al rol Administrador (§8.4, `POST /administrator/students` crea alumno+tutor juntos) — no construido. Por ahora los tutores solo se dan de alta por seeder (`TutorSeeder`) |
+| 10.2 | Migración `alumno_tutor` (pivote) | ✅ | Ya existía como `student_tutor` (`relationship`, `is_primary`, `receives_notifications`). `database/seeders/StudentSeeder.php` ya vincula 1-2 tutores reales a cada alumno sembrado |
+| 10.3 | Migración `notificaciones` | ✅ | Ya existía como `notifications` (`App\Models\AppNotification`). **Fix de esquema:** `user_id` era `NOT NULL`, pero los tutores familiares no tienen cuenta de usuario (`tutors` no tiene `users_id`) — imposible notificar a un tutor sin dejarlo en null. Se corrigió la migración (`user_id` ahora `nullable`), mismo criterio que otros gaps de esquema ya corregidos en este proyecto (`CareerFactory`, `DeviceFactory`) |
+| 10.4 | Migración `preferencias_notificacion` | ✅ | Ya existía como `notification_preferences`. Se agregó `Tutor::booted()` (`app/Models/Tutor.php`) que crea la preferencia automáticamente (todo en `true`) al crear cualquier `Tutor` — cumple la regla de negocio documentada y cubre tanto el seeder como el futuro CRUD de admin sin tocar nada más |
+| 10.5 | `NotificationService` | ✅ | `app/Services/NotificationService.php` — `notifyAbsence()`/`notifyLate()`. Filtra por `student_tutor.receives_notifications`, `tutors.is_active` y `notification_preferences.{absences,lates}`. Conectado en los tres puntos donde ya se crea una `Attendance`: `Profesor\CloseClassSessionService::closeSession()` (cubre cierre manual y `class-sessions:auto-close`, Módulo 6.11), `Device\NfcTapService::registerAttendance()` y `Profesor\RegisterNfcAttendanceService::register()` (ambos disparan `notifyLate()` en `RETARDO`). **Solo cubre `INASISTENCIA`/`RETARDO`** — `INCIDENTE`/`JUSTIFICANTE`/`RECLAMO`/`RECLAMO_PROFESOR`/`AVISO` dependen de módulos aún no construidos. **Sin canal de entrega real** (SMS/email/push) — "notificar" hoy es solo crear la fila en `notifications`, lista para cuando exista una pantalla/API que las lea (`GET /administrator/notifications`, Módulo 14, aún no construido). Tests: `tests/Feature/Services/NotificationServiceTest.php` + assertions agregadas en `AutoCloseClassSessionsTest.php` y `NfcTapTest.php` |
 
 ---
 
@@ -334,18 +338,36 @@ altas de actores lo llaman desde dentro de la app, no como endpoint público.
 
 ---
 
-## Módulo 14 — CRUDs administrativos
+## Módulo 14 — Administrador Escolar (§8.4)
+
+> Reemplaza la lista genérica anterior (`/api/v1/usuarios`, `/api/v1/docentes`, etc. no
+> existían) por los endpoints reales de `role:administrador`. El rol en BD es
+> **`administrador`** (español, `RoleSeeder`), no `administrator` como ilustra el `.md`
+> — mismo tipo de discrepancia ya documentada para `director_carrera`/`career_director`.
+> Rutas bajo `/api/v1/administrador/*`, namespace `App\Http\Controllers\Administrador`,
+> middleware `['governance.auth', 'role:administrador']`.
+
+### Tanda 1 — CRUDs de catálogo (✅ completa)
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 14.1 | CRUD usuarios (`/api/v1/usuarios`) | ⏳ | Con Policies |
-| 14.2 | CRUD alumnos (`/api/v1/alumnos`) | ⏳ | PATCH nfc, GET asistencias |
-| 14.3 | CRUD docentes (`/api/v1/docentes`) | ⏳ | GET horarios |
-| 14.4 | CRUD grupos (`/api/v1/grupos`) | ⏳ | GET alumnos del grupo |
-| 14.5 | CRUD materias (`/api/v1/materias`) | ⏳ | |
-| 14.6 | CRUD aulas (`/api/v1/aulas`) | ⏳ | |
-| 14.7 | CRUD horarios (`/api/v1/horarios`) | ⏳ | Validar traslapes |
-| 14.8 | CRUD ciclos escolares (`/api/v1/ciclos-escolares`) | ⏳ | Solo un activo a la vez |
+| 14.1 | CRUD carreras (`/administrador/careers`) | ✅ | `director_id` es **requerido** en el `POST` (el `.md` lo marca `opt`, pero `careers.director_id` es `NOT NULL` en el esquema real y `CareerFactory` ya lo trataba como obligatorio). Valida que el director tenga rol `director_carrera` (404 `USR03`). `DELETE` = soft delete (`is_active=false`), bloqueado por `CAR03` si tiene grupos activos |
+| 14.2 | CRUD ciclos escolares (`/administrador/school-years`) | ✅ | Sin `DELETE` (no está en el `.md`, los ciclos no se eliminan). Al hacer `PUT` con `status=ACTIVO`, cualquier otro ciclo en `ACTIVO` pasa a `FINALIZADO` automáticamente. `status` por defecto `PROXIMO` (español, sigue la convención ya establecida) |
+| 14.3 | CRUD materias (`/administrador/subjects`) | ✅ | Bloqueado por `SUBJ03` si tiene horarios activos |
+| 14.4 | CRUD grupos (`/administrador/groups`) | ✅ | Bloqueado por `GRP04` si tiene alumnos activos (`User::scopeActive`) |
+| 14.5 | CRUD dispositivos ESP32 (`/administrador/devices`) | ✅ | Incluye `GET /devices/{id}/ping` (`Http::timeout(5)->get("http://{ip}")`, 503 `DEV02` si no responde/timeout/sin IP). Complementa (no reemplaza) el comando `device:register` de la sesión pasada, que sigue sirviendo para altas rápidas sin este endpoint |
+| 14.6 | Trait `RequiresDeletionConfirmation` | ✅ | `app/Http/Controllers/Concerns/RequiresDeletionConfirmation.php` — compartido entre los controladores que exigen `{ confirm: true }` en `DELETE` (422 `VAL03` si falta), evita repetirlo por controlador |
+| 14.7 | Tests (`tests/Feature/Administrador/*`) | ✅ | 36 tests — `CareerTest`, `SchoolYearTest`, `SubjectTest`, `GroupTest`, `DeviceTest`. Nuevo helper `makeAdmin()` en `tests/Pest.php` |
+
+### Tandas siguientes (pendientes, acordadas con el usuario)
+
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| 14.8 | CRUD profesores (`/administrador/teachers` + toggle tutor académico) | ⏳ | Crea identidad en gobernanza (como `/auth/users`), sube foto, envía contraseña temporal por correo (sin servicio de correo configurado todavía) |
+| 14.9 | CRUD alumnos + tutores (`/administrador/students`, `.../students/{id}/tutors`) | ⏳ | El endpoint de creación de alumno crea alumno+tutor+`student_tutor`+`notification_preferences` en un solo `POST` — complementa el Módulo 10 (hasta ahora solo `TutorSeeder`/`StudentSeeder`) |
+| 14.10 | Permisos de usuario (`/administrador/users/{id}/permissions*`) | ⏳ | |
+| 14.11 | Notificaciones admin (`/administrador/notifications*`) | ⏳ | Listar/crear/reenviar — complementa `NotificationService` (Módulo 10), que hoy solo crea filas, sin nada que las liste |
+| 14.12 | Proteger `POST /api/v1/auth/users` | ⏳ | Sigue sin ninguna autorización (ver Módulo 4) — pendiente desde hace varias sesiones, resolver junto con el CRUD de profesores/alumnos si se decide que ese endpoint deba requerir `role:administrador` |
 
 ---
 

@@ -216,3 +216,11 @@ function makeScheduleCurrentlyInSession(?Carbon $now = null): array
 
     return ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule, 'device' => $device];
 }
+
+/**
+ * Creates a local user with the administrador role, ready for fakeGovernanceAuth().
+ */
+function makeAdmin(int $governanceUserId = 1): User
+{
+    return User::factory()->administrator()->create(['governance_user_id' => $governanceUserId]);
+}

@@ -6,9 +6,12 @@ use App\Exceptions\ApiException;
 use App\Models\Attendance;
 use App\Models\ClassSession;
 use App\Models\User;
+use App\Services\NotificationService;
 
 class CloseClassSessionService
 {
+    public function __construct(protected NotificationService $notifications) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -38,7 +41,7 @@ class CloseClassSessionService
         $registeredIds = Attendance::where('class_session_id', $session->id)->pluck('student_id');
 
         foreach ($students->whereNotIn('id', $registeredIds) as $student) {
-            Attendance::create([
+            $attendance = Attendance::create([
                 'class_session_id' => $session->id,
                 'student_id' => $student->id,
                 'schedule_id' => $session->schedule_id,
@@ -47,6 +50,8 @@ class CloseClassSessionService
                 'status' => 'FALTA',
                 'method' => 'SISTEMA',
             ]);
+
+            $this->notifications->notifyAbsence($attendance);
         }
 
         $session->update([
