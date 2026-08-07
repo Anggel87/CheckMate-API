@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class,
             AdministratorSeeder::class,
             ClassroomSeeder::class,
+            DeviceSeeder::class,
             SchoolYearSeeder::class,
             DirectorSeeder::class,
             CareerSeeder::class,
@@ -22,8 +23,15 @@ class DatabaseSeeder extends Seeder
             TutorSeeder::class,
             GroupSeeder::class,
             StudentSeeder::class,
+            UserDetailSeeder::class,
             ScheduleSeeder::class,
+            AttendanceSettingSeeder::class,
             AttendanceSeeder::class,
+            IncidentSeeder::class,
+            ClaimSeeder::class,
+            JustificationSeeder::class,
+            AppNotificationSeeder::class,
+            UserPermissionOverrideSeeder::class,
         ]);
     }
 }

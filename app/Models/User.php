@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -87,6 +88,24 @@ class User extends Authenticatable
     }
 
     /**
+     * Permisos que el usuario tiene por su rol, via los permission_groups
+     * asignados a ese rol (ej. {rol}.full, sembrado por PermissionSeeder).
+     *
+     * @return Collection<int, Permission>
+     */
+    public function rolePermissions(): Collection
+    {
+        return $this->role
+            ->permissionGroups()
+            ->with('permissions')
+            ->get()
+            ->flatMap(fn (PermissionGroup $group) => $group->permissions)
+            ->filter(fn (Permission $permission) => $permission->is_active)
+            ->unique('id')
+            ->values();
+    }
+
+    /**
      * Permisos efectivos: los de los permission_groups del rol, mas los
      * overrides individuales (PERMITIR agrega, DENEGAR quita).
      *
@@ -94,17 +113,11 @@ class User extends Authenticatable
      */
     public function effectivePermissions(): array
     {
-        $rolePermissions = $this->role
-            ->permissionGroups()
-            ->with('permissions')
-            ->get()
-            ->flatMap(fn (PermissionGroup $group) => $group->permissions)
-            ->filter(fn (Permission $permission) => $permission->is_active)
-            ->pluck('key_name');
+        $rolePermissionKeys = $this->rolePermissions()->pluck('key_name');
 
         $overrides = $this->permissionOverrides()->with('permission')->get();
 
-        $allowed = $rolePermissions->merge(
+        $allowed = $rolePermissionKeys->merge(
             $overrides->where('type', 'PERMITIR')->pluck('permission.key_name')
         );
 

@@ -12,7 +12,9 @@ return new class extends Migration
             $table->mediumIncrements('id');
             $table->unsignedMediumInteger('user_id')->unique();
             $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();
-            $table->string('nfc_uid', 100)->unique();
+            // TEMPORAL: sin unique mientras se prueba una tarjeta NFC física contra
+            // varios usuarios sembrados a la vez. Revertir a ->unique() al terminar.
+            $table->string('nfc_uid', 100);
             $table->string('qr_uuid', 36)->unique();
             $table->timestamps();
         });

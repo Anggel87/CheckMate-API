@@ -46,4 +46,11 @@ return [
         'web_callback_url' => env('GOVERNANCE_WEB_CALLBACK_URL', 'http://localhost:8000/auth/callback'),
     ],
 
+    'twilio' => [
+        'account_sid' => env('TWILIO_ACCOUNT_SID'),
+        'auth_token' => env('TWILIO_AUTH_TOKEN'),
+        'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
+        'default_country_code' => env('TWILIO_WHATSAPP_DEFAULT_COUNTRY_CODE', '52'),
+    ],
+
 ];

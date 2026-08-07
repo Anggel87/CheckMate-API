@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property int $student_id
  * @property int $tutor_id
  * @property int $user_id
+ * @property int|null $sent_by_user_id
  * @property string $title
  * @property string $message
  * @property string $type
@@ -28,6 +29,7 @@ class AppNotification extends Model
         'student_id',
         'tutor_id',
         'user_id',
+        'sent_by_user_id',
         'title',
         'message',
         'type',
@@ -56,5 +58,10 @@ class AppNotification extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function sentBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sent_by_user_id');
     }
 }

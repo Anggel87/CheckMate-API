@@ -224,3 +224,20 @@ function makeAdmin(int $governanceUserId = 1): User
 {
     return User::factory()->administrator()->create(['governance_user_id' => $governanceUserId]);
 }
+
+/**
+ * Fakes gobernanza's POST /internal/users so GovernanceClient::createUser() resolves
+ * without a real call. Only adds the "internal/users" pattern — does not touch the
+ * "auth/me" one, so it's safe to call alongside fakeGovernanceAuth() in the same test.
+ */
+function fakeGovernanceCreateUser(int $governanceUserId = 500, string $temporaryPassword = 'Temp1234!'): void
+{
+    Http::fake([
+        '*/internal/users' => Http::response([
+            'data' => [
+                'user' => ['id' => $governanceUserId],
+                'temporary_password' => $temporaryPassword,
+            ],
+        ], 201),
+    ]);
+}
