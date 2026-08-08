@@ -15,6 +15,7 @@ use App\Models\Group;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Administrador\CreateTeacherService;
+use App\Services\AuditLogger;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,12 @@ use Illuminate\Http\Request;
 class TeacherController extends Controller
 {
     use ApiResponse, RequiresDeletionConfirmation, ValidatesEvidenceFile;
+
+    /** @var list<string> */
+    private const AUDIT_FIELDS = [
+        'first_name', 'second_name', 'first_surname', 'second_surname',
+        'email', 'phone', 'birth_date', 'gender', 'role_id', 'active', 'photo',
+    ];
 
     public function index(Request $request): JsonResponse
     {
@@ -53,7 +60,7 @@ class TeacherController extends Controller
         return $this->successResponse('Profesor obtenido correctamente.', new AdminTeacherResource($model));
     }
 
-    public function store(StoreTeacherRequest $request, CreateTeacherService $service): JsonResponse
+    public function store(StoreTeacherRequest $request, CreateTeacherService $service, AuditLogger $auditLogger): JsonResponse
     {
         $data = $request->validated();
 
@@ -68,12 +75,15 @@ class TeacherController extends Controller
 
         $teacher = $service->create($teacherData, $request->file('photo'), $isAcademicTutor);
 
+        $auditLogger->log('teacher', $teacher->id, 'CREATE', $request->user()->id, null, $teacher->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Profesor creado correctamente.', new AdminTeacherResource($teacher->load('role')), 201);
     }
 
-    public function update(UpdateTeacherRequest $request, int $teacher): JsonResponse
+    public function update(UpdateTeacherRequest $request, int $teacher, AuditLogger $auditLogger): JsonResponse
     {
         $model = $this->findTeacher($teacher);
+        $before = $model->only(self::AUDIT_FIELDS);
 
         $data = $request->validated();
 
@@ -85,10 +95,12 @@ class TeacherController extends Controller
 
         $model->update($data);
 
+        $auditLogger->log('teacher', $model->id, 'UPDATE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Profesor actualizado correctamente.', new AdminTeacherResource($model->load('role')));
     }
 
-    public function destroy(Request $request, int $teacher): JsonResponse
+    public function destroy(Request $request, int $teacher, AuditLogger $auditLogger): JsonResponse
     {
         $this->ensureConfirmed($request);
 
@@ -98,7 +110,10 @@ class TeacherController extends Controller
             throw ApiException::conflict('No se puede desactivar a un profesor con horarios activos asignados.', 'USR05');
         }
 
+        $before = $model->only(self::AUDIT_FIELDS);
         $model->update(['active' => false]);
+
+        $auditLogger->log('teacher', $model->id, 'DELETE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
 
         return $this->successResponse('Profesor dado de baja correctamente.', new AdminTeacherResource($model->load('role')));
     }

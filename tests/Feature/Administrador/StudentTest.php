@@ -42,6 +42,7 @@ test('creates a student with its primary tutor', function () {
 
     $this->assertDatabaseHas('student_tutor', ['student_id' => $student->id, 'tutor_id' => $tutor->id, 'is_primary' => true]);
     $this->assertDatabaseHas('notification_preferences', ['tutor_id' => $tutor->id, 'absences' => true]);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'student', 'entity_id' => $student->id, 'action' => 'CREATE']);
 
     Mail::assertSent(TemporaryPasswordMail::class, fn (TemporaryPasswordMail $mail) => $mail->hasTo($student->email)
         && $mail->temporaryPassword === 'Temp1234!');
@@ -142,6 +143,7 @@ test('updates a student', function () {
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertOk()->assertJsonPath('data.first_name', 'Nombre actualizado');
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'student', 'entity_id' => $student->id, 'action' => 'UPDATE']);
 });
 
 test('deactivates a student when confirmed', function () {
@@ -153,6 +155,7 @@ test('deactivates a student when confirmed', function () {
 
     $response->assertOk();
     $this->assertDatabaseHas('users', ['id' => $student->id, 'active' => false]);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'student', 'entity_id' => $student->id, 'action' => 'DELETE']);
 });
 
 test('requires confirmation to deactivate a student', function () {

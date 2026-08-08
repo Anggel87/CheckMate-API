@@ -67,6 +67,7 @@ test('registers an on time attendance via nfc', function () {
 
     $response->assertCreated()->assertJsonPath('data.status', 'PRESENTE');
     $this->assertDatabaseHas('attendances', ['student_id' => $student->id, 'status' => 'PRESENTE', 'method' => 'NFC']);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'attendance', 'action' => 'CREATE', 'performed_by_user_id' => $teacher->id]);
 });
 
 test('registers a late attendance via nfc beyond the present tolerance', function () {
@@ -182,6 +183,7 @@ test('closes a session and marks unregistered students as absent', function () {
         ->assertJsonPath('data.absent', 1);
 
     $this->assertDatabaseHas('attendances', ['student_id' => $missing->id, 'status' => 'FALTA', 'method' => 'SISTEMA']);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'attendance', 'action' => 'CREATE', 'performed_by_user_id' => $teacher->id]);
     expect(ClassSession::find($session->id)->status)->toBe('CERRADA');
 });
 

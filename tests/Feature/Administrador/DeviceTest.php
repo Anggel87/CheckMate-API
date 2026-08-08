@@ -14,6 +14,7 @@ test('creates a device for an existing classroom', function () {
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated()->assertJsonPath('data.mac_address', 'AA:BB:CC:DD:EE:FF');
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'device', 'entity_id' => $response->json('data.id'), 'action' => 'CREATE']);
 });
 
 test('rejects a device for a missing classroom', function () {
@@ -48,6 +49,7 @@ test('deactivates a device', function () {
 
     $response->assertOk();
     $this->assertDatabaseHas('devices', ['id' => $device->id, 'is_active' => false]);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'device', 'entity_id' => $device->id, 'action' => 'DELETE']);
 });
 
 test('rejects deactivating an already deactivated device', function () {

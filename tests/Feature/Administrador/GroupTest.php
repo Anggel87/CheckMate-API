@@ -18,6 +18,7 @@ test('creates a group', function () {
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated()->assertJsonPath('data.grade', '1');
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'group', 'entity_id' => $response->json('data.id'), 'action' => 'CREATE']);
 });
 
 test('rejects a group referencing a missing school year', function () {
@@ -82,4 +83,5 @@ test('deactivates a group with no active students when confirmed', function () {
 
     $response->assertOk();
     $this->assertDatabaseHas('groups', ['id' => $group->id, 'is_active' => false]);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'group', 'entity_id' => $group->id, 'action' => 'DELETE']);
 });

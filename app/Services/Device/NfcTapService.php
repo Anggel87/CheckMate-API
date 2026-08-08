@@ -2,6 +2,7 @@
 
 namespace App\Services\Device;
 
+use App\Events\AttendanceRegistered;
 use App\Exceptions\ApiException;
 use App\Models\Attendance;
 use App\Models\ClassSession;
@@ -114,6 +115,8 @@ class NfcTapService
             'status' => $status,
             'method' => 'NFC',
         ]);
+
+        AttendanceRegistered::dispatch($attendance, $student->id);
 
         if ($status === 'RETARDO') {
             $this->notifications->notifyLate($attendance);

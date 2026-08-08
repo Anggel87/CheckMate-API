@@ -29,6 +29,7 @@ test('creates a teacher', function () {
     $teacher = User::where('email', 'carlos.lopez@example.com')->firstOrFail();
     $this->assertDatabaseHas('users', ['id' => $teacher->id]);
     expect($teacher->role->name)->toBe('profesor');
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'teacher', 'entity_id' => $teacher->id, 'action' => 'CREATE']);
 
     Mail::assertSent(TemporaryPasswordMail::class, fn (TemporaryPasswordMail $mail) => $mail->hasTo($teacher->email)
         && $mail->temporaryPassword === 'Temp1234!');
@@ -120,6 +121,7 @@ test('updates a teacher', function () {
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertOk()->assertJsonPath('data.first_name', 'Nombre actualizado');
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'teacher', 'entity_id' => $teacher->id, 'action' => 'UPDATE']);
 });
 
 test('deactivates a teacher when confirmed', function () {
@@ -130,6 +132,7 @@ test('deactivates a teacher when confirmed', function () {
 
     $response->assertOk();
     $this->assertDatabaseHas('users', ['id' => $teacher->id, 'active' => false]);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'teacher', 'entity_id' => $teacher->id, 'action' => 'DELETE']);
 });
 
 test('requires confirmation to deactivate a teacher', function () {

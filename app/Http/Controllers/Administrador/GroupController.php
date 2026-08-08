@@ -11,6 +11,7 @@ use App\Http\Resources\AdminGroupResource;
 use App\Models\Career;
 use App\Models\Group;
 use App\Models\SchoolYear;
+use App\Services\AuditLogger;
 use App\Traits\ApiResponse;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,9 @@ use Illuminate\Http\Request;
 class GroupController extends Controller
 {
     use ApiResponse, RequiresDeletionConfirmation;
+
+    /** @var list<string> */
+    private const AUDIT_FIELDS = ['school_year_id', 'career_id', 'section', 'grade', 'shift', 'is_active'];
 
     public function index(Request $request): JsonResponse
     {
@@ -43,7 +47,7 @@ class GroupController extends Controller
         return $this->successResponse('Grupo obtenido correctamente.', new AdminGroupResource($model));
     }
 
-    public function store(StoreGroupRequest $request): JsonResponse
+    public function store(StoreGroupRequest $request, AuditLogger $auditLogger): JsonResponse
     {
         $data = $request->validated();
 
@@ -61,10 +65,12 @@ class GroupController extends Controller
             throw ApiException::conflict('Ya existe un grupo con ese grado y sección en la misma carrera y ciclo.', 'GRP03');
         }
 
+        $auditLogger->log('group', $group->id, 'CREATE', $request->user()->id, null, $group->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Grupo creado correctamente.', new AdminGroupResource($group), 201);
     }
 
-    public function update(UpdateGroupRequest $request, int $group): JsonResponse
+    public function update(UpdateGroupRequest $request, int $group, AuditLogger $auditLogger): JsonResponse
     {
         $model = Group::find($group);
 
@@ -72,6 +78,7 @@ class GroupController extends Controller
             throw ApiException::notFound('El grupo solicitado no existe.', 'GRP02');
         }
 
+        $before = $model->only(self::AUDIT_FIELDS);
         $data = $request->validated();
 
         if (isset($data['school_year_id']) && ! SchoolYear::whereKey($data['school_year_id'])->exists()) {
@@ -88,10 +95,12 @@ class GroupController extends Controller
             throw ApiException::conflict('Ya existe un grupo con ese grado y sección en la misma carrera y ciclo.', 'GRP03');
         }
 
+        $auditLogger->log('group', $model->id, 'UPDATE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Grupo actualizado correctamente.', new AdminGroupResource($model));
     }
 
-    public function destroy(Request $request, int $group): JsonResponse
+    public function destroy(Request $request, int $group, AuditLogger $auditLogger): JsonResponse
     {
         $this->ensureConfirmed($request);
 
@@ -105,7 +114,10 @@ class GroupController extends Controller
             throw ApiException::conflict('No se puede desactivar un grupo con alumnos activos asignados.', 'GRP04');
         }
 
+        $before = $model->only(self::AUDIT_FIELDS);
         $model->update(['is_active' => false]);
+
+        $auditLogger->log('group', $model->id, 'DELETE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
 
         return $this->successResponse('Grupo dado de baja correctamente.', new AdminGroupResource($model));
     }

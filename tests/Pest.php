@@ -241,3 +241,20 @@ function fakeGovernanceCreateUser(int $governanceUserId = 500, string $temporary
         ], 201),
     ]);
 }
+
+/**
+ * Creates a career director (role director_carrera) with a Career whose director_id
+ * points at them, plus a Group inside that career (active school year) ready to enroll
+ * students/teachers/schedules in for scope tests.
+ *
+ * @return array{director: User, career: Career, group: Group}
+ */
+function makeCareerDirector(int $governanceUserId = 1): array
+{
+    $director = User::factory()->careerDirector()->create(['governance_user_id' => $governanceUserId]);
+    $career = Career::factory()->create(['director_id' => $director->id]);
+    $schoolYear = SchoolYear::factory()->active()->create();
+    $group = Group::factory()->create(['career_id' => $career->id, 'school_year_id' => $schoolYear->id]);
+
+    return ['director' => $director, 'career' => $career, 'group' => $group];
+}

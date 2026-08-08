@@ -1,19 +1,17 @@
 <?php
 
-namespace App\Http\Controllers\Tutor;
+namespace App\Http\Controllers\Director;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tutor\ClaimActionRequest;
+use App\Http\Requests\Director\ClaimActionRequest;
 use App\Http\Resources\TutorClaimResource;
 use App\Models\Claim;
-use App\Models\User;
 use App\Services\ClaimActionService;
 use App\Traits\ApiResponse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 
 class ClaimController extends Controller
 {
@@ -21,13 +19,7 @@ class ClaimController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $groupIds = $this->tutorGroupIds($request->user());
-
-        $claims = $this->scopedQuery($groupIds)
-            ->when($request->query('career_id'), fn ($query, $careerId) => $query->whereHas(
-                'attendance.schedule.group',
-                fn ($groupQuery) => $groupQuery->where('career_id', $careerId)
-            ))
+        $claims = $this->scopedQuery($request->user()->id)
             ->when($request->query('group_id'), fn ($query, $groupId) => $query->whereHas(
                 'attendance.schedule',
                 fn ($scheduleQuery) => $scheduleQuery->where('group_id', $groupId)
@@ -41,8 +33,7 @@ class ClaimController extends Controller
 
     public function show(Request $request, int $claim): JsonResponse
     {
-        $groupIds = $this->tutorGroupIds($request->user());
-        $claimModel = $this->scopedQuery($groupIds)->find($claim);
+        $claimModel = $this->scopedQuery($request->user()->id)->find($claim);
 
         if ($claimModel === null) {
             throw ApiException::notFound('La reclamación solicitada no existe.', 'CLM01');
@@ -53,8 +44,7 @@ class ClaimController extends Controller
 
     public function action(ClaimActionRequest $request, int $claim, ClaimActionService $service): JsonResponse
     {
-        $groupIds = $this->tutorGroupIds($request->user());
-        $claimModel = $this->scopedQuery($groupIds)->find($claim);
+        $claimModel = $this->scopedQuery($request->user()->id)->find($claim);
 
         if ($claimModel === null) {
             throw ApiException::notFound('La reclamación solicitada no existe.', 'CLM01');
@@ -73,21 +63,10 @@ class ClaimController extends Controller
         ]);
     }
 
-    /**
-     * @return Collection<int, int>
-     */
-    private function tutorGroupIds(User $tutor): Collection
-    {
-        return $tutor->academicTutor?->activeGroups()->pluck('groups.id') ?? collect();
-    }
-
-    /**
-     * @param  Collection<int, int>  $groupIds
-     */
-    private function scopedQuery(Collection $groupIds): Builder
+    private function scopedQuery(int $directorId): Builder
     {
         return Claim::query()
-            ->whereHas('attendance.schedule', fn ($query) => $query->whereIn('group_id', $groupIds))
+            ->where('director_id', $directorId)
             ->with(['tutor', 'attendance.schedule.subject', 'attendance.schedule.group.career']);
     }
 }

@@ -3,21 +3,24 @@
 namespace App\Http\Controllers\Administrador;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\PingsDevice;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Administrador\StoreDeviceRequest;
 use App\Http\Requests\Administrador\UpdateDeviceRequest;
 use App\Http\Resources\AdminDeviceResource;
 use App\Models\Classroom;
 use App\Models\Device;
+use App\Services\AuditLogger;
 use App\Traits\ApiResponse;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 
 class DeviceController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, PingsDevice;
+
+    /** @var list<string> */
+    private const AUDIT_FIELDS = ['mac_address', 'ip', 'is_active', 'classroom_id'];
 
     public function index(Request $request): JsonResponse
     {
@@ -48,24 +51,12 @@ class DeviceController extends Controller
             throw ApiException::notFound('El dispositivo solicitado no existe.', 'DEV01');
         }
 
-        if ($model->ip === null) {
-            throw new ApiException('El dispositivo no respondió. Verifica su conexión.', 503, 'DEV02');
-        }
-
-        try {
-            $response = Http::timeout(5)->get("http://{$model->ip}");
-        } catch (ConnectionException) {
-            throw new ApiException('El dispositivo no respondió. Verifica su conexión.', 503, 'DEV02');
-        }
-
-        if (! $response->successful()) {
-            throw new ApiException('El dispositivo no respondió. Verifica su conexión.', 503, 'DEV02');
-        }
+        $this->pingDevice($model);
 
         return $this->successResponse('El dispositivo está en línea.', ['status' => 'ONLINE']);
     }
 
-    public function store(StoreDeviceRequest $request): JsonResponse
+    public function store(StoreDeviceRequest $request, AuditLogger $auditLogger): JsonResponse
     {
         $data = $request->validated();
 
@@ -79,10 +70,12 @@ class DeviceController extends Controller
 
         $device = Device::create([...$data, 'mac_address' => strtoupper($data['mac_address']), 'is_active' => true]);
 
+        $auditLogger->log('device', $device->id, 'CREATE', $request->user()->id, null, $device->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Dispositivo creado correctamente.', new AdminDeviceResource($device), 201);
     }
 
-    public function update(UpdateDeviceRequest $request, int $device): JsonResponse
+    public function update(UpdateDeviceRequest $request, int $device, AuditLogger $auditLogger): JsonResponse
     {
         $model = Device::find($device);
 
@@ -90,6 +83,7 @@ class DeviceController extends Controller
             throw ApiException::notFound('El dispositivo solicitado no existe.', 'DEV01');
         }
 
+        $before = $model->only(self::AUDIT_FIELDS);
         $data = $request->validated();
 
         if (isset($data['classroom_id']) && ! Classroom::whereKey($data['classroom_id'])->exists()) {
@@ -98,10 +92,12 @@ class DeviceController extends Controller
 
         $model->update($data);
 
+        $auditLogger->log('device', $model->id, 'UPDATE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Dispositivo actualizado correctamente.', new AdminDeviceResource($model));
     }
 
-    public function destroy(int $device): JsonResponse
+    public function destroy(Request $request, int $device, AuditLogger $auditLogger): JsonResponse
     {
         $model = Device::find($device);
 
@@ -113,7 +109,10 @@ class DeviceController extends Controller
             throw ApiException::conflict('El dispositivo ya se encuentra dado de baja.', 'DEV04');
         }
 
+        $before = $model->only(self::AUDIT_FIELDS);
         $model->update(['is_active' => false]);
+
+        $auditLogger->log('device', $model->id, 'DELETE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
 
         return $this->successResponse('Dispositivo dado de baja correctamente.', new AdminDeviceResource($model));
     }

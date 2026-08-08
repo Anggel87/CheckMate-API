@@ -56,6 +56,7 @@ test('registers an on time attendance for a student tap within tolerance', funct
 
     $response->assertCreated()->assertJsonPath('data.event', 'attendance_registered')->assertJsonPath('data.status', 'PRESENTE');
     $this->assertDatabaseHas('attendances', ['student_id' => $student->id, 'status' => 'PRESENTE', 'method' => 'NFC']);
+    $this->assertDatabaseHas('audit_logs', ['entity' => 'attendance', 'action' => 'CREATE', 'performed_by_user_id' => $student->id]);
 });
 
 test('registers a late attendance for a student tap beyond tolerance and notifies their tutor', function () {

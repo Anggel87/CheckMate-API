@@ -192,8 +192,8 @@ si el rol no es administrador).
 | 6.4 | `AttendanceRegistrationService` | ✅ | `App\Services\Device\NfcTapService` |
 | 6.5 | `DeviceAttendanceController` | ✅ | `App\Http\Controllers\Device\NfcController` |
 | 6.6 | Form Request `NfcAttendanceRequest` | ✅ | `App\Http\Requests\Device\NfcTapRequest` |
-| 6.7 | Evento `AttendanceRegistered` | ⏳ | No construido — no hay listeners que lo necesiten todavía (notificaciones = Módulo 10, sin construir) |
-| 6.8 | Listener `WriteAttendanceAuditLog` | ⏳ | Depende de 6.7 y del Módulo 12 (Auditoría) |
+| 6.7 | Evento `AttendanceRegistered` | ✅ | `App\Events\AttendanceRegistered` (`attendance`, `performedByUserId` nullable). Único evento real de Laravel en todo el proyecto — se justifica porque hay 3 puntos de creación de `Attendance` (`Device\NfcTapService`, `Profesor\RegisterNfcAttendanceService`, `Profesor\CloseClassSessionService`) que necesitan el mismo efecto secundario; en cualquier otro caso similar del proyecto se llama al servicio directo, sin eventos |
+| 6.8 | Listener `WriteAttendanceAuditLog` | ✅ | `App\Listeners\WriteAttendanceAuditLog` (auto-descubierto, sin registro manual — confirmado con `php artisan event:list`), escribe en `audit_logs` (entity `attendance`) vía `AuditLogger` (Módulo 15). Envuelto en try/catch + `Log::warning`, mismo criterio que `NotificationService::sendWhatsApp()` — un fallo de auditoría nunca debe tumbar el registro real de asistencia. **`audit_logs.performed_by_user_id` se hizo nullable** (mismo criterio que `notifications.sent_by_user_id`): el actor es el propio alumno en un tap NFC, el profesor en el flujo de app/cierre manual, y `null` cuando lo genera el cron `class-sessions:auto-close` sin ningún usuario autenticado detrás |
 | 6.9 | Tests de flujo NFC | ✅ | `tests/Feature/Device/NfcTapTest.php` — 11 tests: abre sesión, re-tap (`SES01`), `PRESENTE`/`RETARDO`, `USR02`, `ATT02`, `ATT01`, `SES02`, `SES04`, `DEV01`, `DEV04` |
 | 6.10 | `POST /api/v1/device/nfc` — endpoint único, sin autenticación | ✅ | Un solo endpoint decide todo por el `nfc_uid`: si es el profesor del horario vigente en ese salón → abre la `class_session` (tolerancia cuenta desde `opened_at`, no desde `schedule.start_time`); si es un alumno → registra su asistencia contra la sesión ya abierta. Identificación del device por `mac_address` en el body, **sin token ni middleware** (decisión explícita del usuario para el prototipo — riesgo aceptado: cualquiera que conozca la MAC de un device real puede llamarlo). Código de error nuevo `SES04` (no está en el catálogo de `CLAUDE_CONTEXT.md`): "No hay una clase programada en este salón en este momento." No comparte código con `Profesor\RegisterNfcAttendanceService`/`OpenClassSessionService` (Módulo 7) — ese flujo de la app sigue intacto para cuando el profesor quiera pasar lista manualmente |
 | 6.11 | Cierre automático de sesiones | ✅ | El usuario descartó cerrar por un segundo tap del profesor (se le podría olvidar y la clase quedaría abierta). En su lugar: comando `class-sessions:auto-close` programado cada 5 min (`routes/console.php`, `Schedule::command(...)->everyFiveMinutes()`) que cierra toda `class_session` `ABIERTA` cuyo `schedule.end_time` ya pasó, reutilizando `CloseClassSessionService::closeSession()` (extraído del `close()` existente de Módulo 7 — mismo comportamiento: marca `FALTA` a quien no registró, conteos). **No manda notificaciones a tutores todavía** (Módulo 10 no existe) — tampoco lo hacía el cierre manual existente. Test: `tests/Feature/Console/AutoCloseClassSessionsTest.php` |
@@ -307,23 +307,37 @@ si el rol no es administrador).
 
 ## Módulo 11 — Incidencias
 
+> Cubierto funcionalmente por el Módulo 7 (`incidents`/`incident_students`,
+> `Profesor\IncidentController`) y ampliado por el Módulo 15 (CRUD + cierre desde
+> Director de Carrera) — no hace falta construir nada adicional para lo que este módulo
+> describe. `gravedad` real es `BAJA/MEDIA/ALTA/CRITICA` (ya coincide con lo aquí
+> ilustrado); no existe una tabla `historial_incidencias` separada, el estado actual vive
+> directo en `incidents.status`.
+
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 11.1 | Migración `incidencias` | ⏳ | gravedad: BAJA, MEDIA, ALTA, CRITICA |
-| 11.2 | Migración `historial_incidencias` | ⏳ | |
-| 11.3 | Modelo `Incidencia` | ⏳ | |
-| 11.4 | `IncidentService` | ⏳ | |
+| 11.1 | Migración `incidencias` | ✅ | Ya existía como `incidents` (Módulo 7) |
+| 11.2 | Migración `historial_incidencias` | ❌ | No se construyó — sin caso de uso pedido todavía |
+| 11.3 | Modelo `Incidencia` | ✅ | `App\Models\Incident` |
+| 11.4 | `IncidentService` | ✅ | Lógica vive directo en `Profesor\IncidentController`/`Director\IncidentController`, sin capa de servicio separada (mismo criterio que otros controladores del proyecto: servicio solo si hay lógica de negocio real que lo justifique) |
 
 ---
 
 ## Módulo 12 — Auditoría y logs
 
+> Parcialmente cubierto por el Módulo 15 (Director de Carrera): se construyó
+> `audit_logs` (tabla nueva) + `App\Services\AuditLogger` y se instrumentaron las 4
+> escrituras de Administrador (alumnos, profesores, grupos, dispositivos) — no es el
+> `AuditService`/`logs_sistema` genérico que ilustraba este módulo (pensado para
+> acciones de sistema tipo LOGIN, niveles INFO/WARNING/ERROR), sino auditoría de cambios
+> sobre esas 4 entidades específicas, que es lo que `career-director/logs/*` necesitaba.
+
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 12.1 | Migración `auditorias` | ⏳ | accion: CREATE, UPDATE, DELETE, LOGIN, etc. |
-| 12.2 | Migración `logs_sistema` | ⏳ | nivel: INFO, WARNING, ERROR, CRITICAL |
-| 12.3 | `AuditService` | ⏳ | |
-| 12.4 | Command `logs:clean` | ⏳ | |
+| 12.1 | Migración `auditorias` | ✅ (parcial) | `audit_logs`: `entity`, `entity_id`, `action` (`CREATE/UPDATE/DELETE`, sin `LOGIN`), `performed_by_user_id`, `before`/`after` (json) — ver Módulo 15 |
+| 12.2 | Migración `logs_sistema` | ⏳ | No construida — sin caso de uso pedido todavía |
+| 12.3 | `AuditService` | ✅ (parcial) | `App\Services\AuditLogger::log()` — solo alumnos/profesores/grupos/dispositivos, no un log genérico de toda acción del sistema |
+| 12.4 | Command `logs:clean` | ⏳ | No construido — sin caso de uso pedido todavía |
 
 ---
 
@@ -407,6 +421,31 @@ completas**: catálogo, alumnos+tutores, profesores, permisos y notificaciones.
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
 | 14.12 | Proteger `POST /api/v1/auth/users` | ✅ | Resuelto — ver Módulo 4.2. `role:administrador` |
+
+---
+
+## Módulo 15 — Director de Carrera (§8.5)
+
+> Último rol de `CLAUDE_CONTEXT.md` sin construir. El rol real en BD es
+> `director_carrera` (Spanish, confirmado en `PermissionSeeder`/`RoleSeeder`), no
+> `career_director` como ilustra el `.md` — mismo tipo de discrepancia ya documentada
+> para `administrador`/`administrator`. Rutas bajo `/api/v1/director-carrera/*`
+> (kebab-case español, mismo criterio que el resto del proyecto), namespace
+> `App\Http\Controllers\Director`, middleware `['governance.auth', 'role:director_carrera']`.
+> Todo el alcance se calcula con `App\Services\Director\CareerScope`, que traduce
+> "director autenticado" a los `career_id`/`group_id`/`student_id`/`teacher_id`/
+> `device_id` que puede ver (`careers.director_id` no es único, así que un director
+> puede en teoría tener más de una carrera).
+
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| 15.1 | Grupos/Alumnos/Profesores (solo lectura) | ✅ | `Director\GroupController`/`StudentController`/`TeacherController`. Reusan `GroupStudentResource`/`StudentProfileResource`/`StudentAttendanceResource`/`JustificationResource` ya existentes (mismo dato que Profesor expone, solo cambia el scope). `teachers/{id}/class-attendance` no tenía rango de fechas definido en el `.md` — se decidió un default de "últimos 7 días" si no se manda `date_from`/`date_to` |
+| 15.2 | Incidentes (CRUD + cierre) | ✅ | `Director\IncidentController`, mismo modelo `Incident` que Profesor (Módulo 7/11) pero con `schedule_id`/`student_ids` explícitos en el body (a diferencia de Profesor, que infiere el horario) y `409 INC03` (no `INC02`) en `PUT`/`close`. `POST .../incidents/{id}/close` por fin resuelve el "hasta que exista un flujo de revisión" que quedó documentado como limitación en el Módulo 7 — fija `reviewed_by_user_id` al director que cierra |
+| 15.3 | Reclamos (lectura + acción) | ✅ | `Director\ClaimController`, alcance trivial vía `claims.director_id = auth()->id()` (a diferencia de Tutor, que necesita resolver grupos). **Refactor:** `App\Services\Tutor\ClaimActionService` se movió a `App\Services\ClaimActionService` (raíz) por ser lógica compartida entre Tutor y Director, sin nada específico de un solo rol — mismo criterio de la convención del proyecto ("compartido entre módulos, nunca duplicado") |
+| 15.4 | Gráficas | ✅ | `Director\ChartController` — `charts/general` (resumen de asistencia), `charts/incidents` (por severidad/status), `charts/absences` (FALTA por grupo/materia), `charts/justifications` (por status). El `.md` no especifica forma de respuesta para estos 4 endpoints (a diferencia del resto del rol) — se diseñó una forma simple y consistente con el resto de la API, documentada como decisión nueva |
+| 15.5 | Dispositivos (solo lectura) | ✅ | `Director\DeviceController`, alcance vía `CareerScope::deviceIds()` (dispositivo → salón → horario activo → grupo → carrera). `ping()` se extrajo a un trait compartido `App\Http\Controllers\Concerns\PingsDevice`, reusado también por `Administrador\DeviceController` (antes tenía la lógica duplicada) |
+| 15.6 | Auditoría — `audit_logs` + `AuditLogger` + logs de Director | ✅ | Ver Módulo 12 (parcial). Tabla nueva `audit_logs` (`entity`, `entity_id`, `action`, `performed_by_user_id`, `before`/`after` json). Se instrumentaron `store`/`update`/`destroy` de `Administrador\{Student,Teacher,Group,Device}Controller` con `App\Services\AuditLogger::log()` — sin eventos/listeners de por medio (mismo criterio que `NotificationService`). `Director\AuditLogController` expone `logs/students\|teachers\|groups\|devices` + `logs/{id}`, cada uno resolviendo el set de `entity_id` permitidos vía `CareerScope` antes de filtrar `audit_logs` |
+| 15.7 | Tests (`tests/Feature/Director/*`) | ✅ | 24 tests nuevos (`GroupTest`, `StudentTest`, `TeacherTest`, `IncidentTest`, `ClaimTest`, `ChartTest`, `DeviceTest`, `AuditLogTest`) + aserciones de `audit_logs` agregadas a los tests ya existentes de `Administrador/{Student,Teacher,Group,Device}Test.php`. Nuevo helper `makeCareerDirector()` en `tests/Pest.php`. Suite completa: 201 tests |
 
 ---
 

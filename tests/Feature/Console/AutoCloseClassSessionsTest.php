@@ -40,6 +40,11 @@ test('closes a class session whose schedule already ended and marks missing stud
         'tutor_id' => $tutor->id,
         'type' => 'INASISTENCIA',
     ]);
+    $this->assertDatabaseHas('audit_logs', [
+        'entity' => 'attendance',
+        'action' => 'CREATE',
+        'performed_by_user_id' => null,
+    ]);
 });
 
 test('leaves a class session open while its schedule has not ended yet', function () {

@@ -15,6 +15,7 @@ use App\Models\Group;
 use App\Models\Tutor;
 use App\Models\User;
 use App\Services\Administrador\CreateStudentService;
+use App\Services\AuditLogger;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,12 @@ use Illuminate\Support\Facades\DB;
 class StudentController extends Controller
 {
     use ApiResponse, RequiresDeletionConfirmation, ValidatesEvidenceFile;
+
+    /** @var list<string> */
+    private const AUDIT_FIELDS = [
+        'first_name', 'second_name', 'first_surname', 'second_surname',
+        'email', 'phone', 'birth_date', 'gender', 'group_id', 'active', 'photo',
+    ];
 
     public function index(Request $request): JsonResponse
     {
@@ -48,7 +55,7 @@ class StudentController extends Controller
         return $this->successResponse('Alumno obtenido correctamente.', new AdminStudentResource($model));
     }
 
-    public function store(StoreStudentRequest $request, CreateStudentService $service): JsonResponse
+    public function store(StoreStudentRequest $request, CreateStudentService $service, AuditLogger $auditLogger): JsonResponse
     {
         $data = $request->validated();
 
@@ -70,12 +77,15 @@ class StudentController extends Controller
 
         $student = $service->create($studentData, $tutorData, $request->file('photo'));
 
+        $auditLogger->log('student', $student->id, 'CREATE', $request->user()->id, null, $student->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Alumno creado correctamente.', new AdminStudentResource($student->load('tutors')), 201);
     }
 
-    public function update(UpdateStudentRequest $request, int $student): JsonResponse
+    public function update(UpdateStudentRequest $request, int $student, AuditLogger $auditLogger): JsonResponse
     {
         $model = $this->findStudent($student);
+        $before = $model->only(self::AUDIT_FIELDS);
 
         $data = $request->validated();
 
@@ -87,15 +97,20 @@ class StudentController extends Controller
 
         $model->update($data);
 
+        $auditLogger->log('student', $model->id, 'UPDATE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
+
         return $this->successResponse('Alumno actualizado correctamente.', new AdminStudentResource($model));
     }
 
-    public function destroy(Request $request, int $student): JsonResponse
+    public function destroy(Request $request, int $student, AuditLogger $auditLogger): JsonResponse
     {
         $this->ensureConfirmed($request);
 
         $model = $this->findStudent($student);
+        $before = $model->only(self::AUDIT_FIELDS);
         $model->update(['active' => false]);
+
+        $auditLogger->log('student', $model->id, 'DELETE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
 
         return $this->successResponse('Alumno dado de baja correctamente.', new AdminStudentResource($model));
     }

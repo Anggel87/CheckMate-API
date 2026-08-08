@@ -2,6 +2,7 @@
 
 namespace App\Services\Profesor;
 
+use App\Events\AttendanceRegistered;
 use App\Exceptions\ApiException;
 use App\Models\Attendance;
 use App\Models\ClassSession;
@@ -27,13 +28,13 @@ class CloseClassSessionService
             throw ApiException::conflict('La sesión ya fue cerrada anteriormente.', 'SES03');
         }
 
-        return $this->closeSession($session);
+        return $this->closeSession($session, $teacher->id);
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function closeSession(ClassSession $session): array
+    public function closeSession(ClassSession $session, ?int $performedByUserId = null): array
     {
         $session->loadMissing('schedule.group');
 
@@ -50,6 +51,8 @@ class CloseClassSessionService
                 'status' => 'FALTA',
                 'method' => 'SISTEMA',
             ]);
+
+            AttendanceRegistered::dispatch($attendance, $performedByUserId);
 
             $this->notifications->notifyAbsence($attendance);
         }
