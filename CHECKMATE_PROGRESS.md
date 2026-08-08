@@ -139,8 +139,9 @@ Auth::attempt(['email' => $request->email, 'password' => $request->password])
 | 3.2 | Modelo `Subject` + `SubjectFactory` | ✅ | Estados: inactive |
 | 3.3 | Migración `schedules` | ✅ | FK: school_years_id, groups_id, teachers_id, subjects_id. Unique compuesto. day_of_week ENUM |
 | 3.4 | Modelo `Schedule` + `ScheduleFactory` | ✅ | Estados: inactive |
-| 3.5 | Migración `attendance_settings` | ⏳ | FK schedules_id. Tolerancias y reglas por horario |
-| 3.6 | Modelo `AttendanceSettings` | ⏳ | |
+| 3.5 | Migración `attendance_settings` | ✅ | Ya existía (1:1 con `schedules`, `schedule_id` unique). `present_tolerance_minutes`/`late_tolerance_minutes` ya se leían en `NfcTapService`/`RegisterNfcAttendanceService`, pero no había forma de administrarlos |
+| 3.6 | Modelo `AttendanceSettings` | ✅ | `App\Models\AttendanceSetting` |
+| 3.7 | CRUD `/administrador/attendance-settings` | ✅ | `App\Http\Controllers\Administrador\AttendanceSettingController` — mismo patrón que `DeviceController`. `404 SCH01` (horario no existe — primer código que lo usa, no hay CRUD de horarios todavía) y `409 ATS02` (ya existe configuración para ese horario, chequeo manual en vez de regla `unique` de Laravel, mismo criterio que `DEV03`). `late_tolerance_minutes` debe ser mayor a `present_tolerance_minutes` (`422 VAL01`) — se valida en el controlador (no en el FormRequest) para que también aplique en updates parciales contra el valor ya guardado. `DELETE` = soft (`is_active=false`), `404 ATS01` si no existe. Tests: `tests/Feature/Administrador/AttendanceSettingTest.php` (8) |
 
 ---
 
@@ -446,6 +447,27 @@ completas**: catálogo, alumnos+tutores, profesores, permisos y notificaciones.
 | 15.5 | Dispositivos (solo lectura) | ✅ | `Director\DeviceController`, alcance vía `CareerScope::deviceIds()` (dispositivo → salón → horario activo → grupo → carrera). `ping()` se extrajo a un trait compartido `App\Http\Controllers\Concerns\PingsDevice`, reusado también por `Administrador\DeviceController` (antes tenía la lógica duplicada) |
 | 15.6 | Auditoría — `audit_logs` + `AuditLogger` + logs de Director | ✅ | Ver Módulo 12 (parcial). Tabla nueva `audit_logs` (`entity`, `entity_id`, `action`, `performed_by_user_id`, `before`/`after` json). Se instrumentaron `store`/`update`/`destroy` de `Administrador\{Student,Teacher,Group,Device}Controller` con `App\Services\AuditLogger::log()` — sin eventos/listeners de por medio (mismo criterio que `NotificationService`). `Director\AuditLogController` expone `logs/students\|teachers\|groups\|devices` + `logs/{id}`, cada uno resolviendo el set de `entity_id` permitidos vía `CareerScope` antes de filtrar `audit_logs` |
 | 15.7 | Tests (`tests/Feature/Director/*`) | ✅ | 24 tests nuevos (`GroupTest`, `StudentTest`, `TeacherTest`, `IncidentTest`, `ClaimTest`, `ChartTest`, `DeviceTest`, `AuditLogTest`) + aserciones de `audit_logs` agregadas a los tests ya existentes de `Administrador/{Student,Teacher,Group,Device}Test.php`. Nuevo helper `makeCareerDirector()` en `tests/Pest.php`. Suite completa: 201 tests |
+
+---
+
+## Módulo 16 — Rutas de desarrollador (demo/pruebas en vivo)
+
+> No es parte del `.md` — herramienta interna pedida para poder demostrar el flujo
+> completo de asistencia (profesor tapea → abre clase → alumno tapea → se cierra la
+> sesión → `FALTA` a quien no tapeó) sin esperar a que el horario real coincida con el
+> reloj. **Solo existen si `APP_ENV=local`** (`routes/api/dev.php` ni se carga en otro
+> ambiente — 404, no 403, ver `routes/api.php`), sin autenticación (mismo criterio que
+> `POST /device/nfc`).
+
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| 16.1 | UID físico separado por rol | ✅ | `UserDetailSeeder` ya no le da el mismo UID a profesores y alumnos — `hI5YmNeJxXygSOwlSTUsQuqiE9fie5gQ4ty5` (profesor/tutor académico) y `B30428070000000000000000000000000000` (alumnos, tarjeta física nueva). Cada UID resuelve por `id` más bajo dentro de su propio grupo, igual que antes. Tras `migrate:fresh --seed`: profesor real = Carlos Ramirez (`teacher@checkmate.test`, id 10), alumno real = Mafalda Larkin (id 30) — cambian si se vuelve a sembrar |
+| 16.2 | `POST /dev/schedules/{id}/activate-now` | ✅ | Pone un horario "vigente ahora mismo" (`day_of_week`/`start_time`/`end_time` alrededor de `now()`, `duration_minutes` opcional en el body, default 90 min) y regresa el `mac_address` del dispositivo del salón para pegarle a `POST /device/nfc` de inmediato. 404 si el salón no tiene dispositivo activo (no se inventa uno) |
+| 16.3 | `POST /dev/schedules/{id}/reset-session` | ✅ | Borra todas las `class_sessions` de ese horario — `attendances.class_session_id` ya tiene `cascadeOnDelete()`, se llevan la asistencia con ellas. Reset completo, no hay una acción separada para solo reabrir sin perder datos |
+| 16.4 | `POST /dev/class-sessions/{id}/close-now` | ✅ | Reusa `Profesor\CloseClassSessionService::closeSession()` tal cual — cierra al instante sin esperar `end_time` ni el cron `class-sessions:auto-close`, dispara `FALTA`+notificación+auditoría igual que en producción |
+| 16.5 | `GET /dev/schedules/{id}/status` | ✅ | Conveniencia de solo lectura: horario, si está vigente ahora, y la sesión de hoy con sus asistencias — para ver el estado de la demo sin consultar varias tablas a mano |
+| 16.6 | No hace falta endpoint para adelantar tolerancias | ✅ (decisión) | `POST /device/nfc` ya acepta `scanned_at` en el body y el estatus se calcula contra `session.opened_at`, no contra el reloj real — ya se puede forzar PRESENTE/RETARDO/FALTA mandando cualquier `scanned_at`, sin necesidad de nada nuevo |
+| 16.7 | Tests (`tests/Feature/Dev/DevToolsTest.php`) | ✅ | 6 tests. Uno confirma que las rutas no existen bajo `APP_ENV=testing` (prueba real del guard, la suite ya corre así); los demás montan `routes/api/dev.php` a mano en un `beforeEach` (replicando el `prefix('api/v1')` + `middleware('api')` que `bootstrap/app.php` aplica normalmente vía `withRouting(api: ...)`) para probar el comportamiento real sin necesitar `APP_ENV=local` |
 
 ---
 

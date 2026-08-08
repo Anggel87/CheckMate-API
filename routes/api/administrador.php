@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Administrador\AttendanceSettingController;
 use App\Http\Controllers\Administrador\CareerController;
 use App\Http\Controllers\Administrador\DeviceController;
 use App\Http\Controllers\Administrador\GroupController;
@@ -24,6 +25,8 @@ Route::prefix('administrador')->middleware(['governance.auth', 'role:administrad
 
     Route::get('devices/{device}/ping', [DeviceController::class, 'ping']);
     Route::apiResource('devices', DeviceController::class);
+
+    Route::apiResource('attendance-settings', AttendanceSettingController::class);
 
     Route::apiResource('students', StudentController::class);
     Route::post('students/{student}/tutors', [StudentController::class, 'addTutor']);
