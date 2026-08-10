@@ -318,7 +318,7 @@ si el rol no es administrador).
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
 | 11.1 | Migración `incidencias` | ✅ | Ya existía como `incidents` (Módulo 7) |
-| 11.2 | Migración `historial_incidencias` | ❌ | No se construyó — sin caso de uso pedido todavía |
+| 11.2 | Historial de incidentes | ✅ | No se construyó una tabla `historial_incidencias` separada — se reusó `audit_logs`/`AuditLogger` (Módulo 15) con `entity='incident'`, ya genérico. `Profesor\IncidentController` y `Director\IncidentController` auditan `store()` (CREATE), `update()` (UPDATE, solo si de verdad cambió algún campo editable), `updateStudents()` (una fila por alumno cuyo estatus del checklist realmente cambió) y `close()` (solo Director, RESUELTO/CANCELADO). Trait compartido `App\Http\Controllers\Concerns\LoadsIncidentHistory` cuelga el historial en el modelo antes de construir `IncidentDetailResource`, que ahora expone `history: [{action, performed_by, before, after, created_at}]` en `show()`/`store()`/`update()`. **Nota relacionada, no tocada:** `TutorClaimResource.history` sigue hardcodeado en `[]` por el mismo motivo original — con `audit_logs` ya genérico sería la misma extensión, pero no se pidió. Tests: 1 caso nuevo en `Profesor/IncidentTest.php` y `Director/IncidentTest.php` cada uno |
 | 11.3 | Modelo `Incidencia` | ✅ | `App\Models\Incident` |
 | 11.4 | `IncidentService` | ✅ | Lógica vive directo en `Profesor\IncidentController`/`Director\IncidentController`, sin capa de servicio separada (mismo criterio que otros controladores del proyecto: servicio solo si hay lógica de negocio real que lo justifique) |
 

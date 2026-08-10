@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Profesor;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\LoadsIncidentHistory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Requests\Profesor\StoreIncidentRequest;
@@ -14,13 +15,14 @@ use App\Http\Resources\IncidentResource;
 use App\Models\Group;
 use App\Models\Incident;
 use App\Models\Schedule;
+use App\Services\AuditLogger;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class IncidentController extends Controller
 {
-    use ApiResponse, ValidatesEvidenceFile;
+    use ApiResponse, LoadsIncidentHistory, ValidatesEvidenceFile;
 
     public function index(Request $request): JsonResponse
     {
@@ -62,11 +64,12 @@ class IncidentController extends Controller
         }
 
         $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente obtenido correctamente.', new IncidentDetailResource($incidentModel));
     }
 
-    public function store(StoreIncidentRequest $request): JsonResponse
+    public function store(StoreIncidentRequest $request, AuditLogger $auditLogger): JsonResponse
     {
         $data = $request->validated();
 
@@ -125,10 +128,19 @@ class IncidentController extends Controller
 
         $incident->load(['reporter', 'schedule.group', 'students']);
 
+        $auditLogger->log('incident', $incident->id, 'CREATE', $request->user()->id, null, [
+            'type' => $incident->type,
+            'title' => $incident->title,
+            'severity' => $incident->severity,
+            'status' => $incident->status,
+        ]);
+
+        $this->loadIncidentHistory($incident);
+
         return $this->successResponse('Incidente creado correctamente.', new IncidentDetailResource($incident), 201);
     }
 
-    public function update(UpdateIncidentRequest $request, int $incident): JsonResponse
+    public function update(UpdateIncidentRequest $request, int $incident, AuditLogger $auditLogger): JsonResponse
     {
         $incidentModel = $this->findIncident($incident);
 
@@ -146,14 +158,22 @@ class IncidentController extends Controller
             $data['evidence'] = $request->file('evidence')->store('incidents', 'public');
         }
 
-        $incidentModel->update(array_intersect_key($data, array_flip(['type', 'title', 'description', 'severity', 'evidence'])));
+        $editableFields = array_intersect_key($data, array_flip(['type', 'title', 'description', 'severity', 'evidence']));
+        $before = $incidentModel->only(array_keys($editableFields));
+
+        $incidentModel->update($editableFields);
+
+        if ($editableFields !== []) {
+            $auditLogger->log('incident', $incidentModel->id, 'UPDATE', $request->user()->id, $before, $incidentModel->only(array_keys($editableFields)));
+        }
 
         $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente actualizado correctamente.', new IncidentDetailResource($incidentModel));
     }
 
-    public function updateStudents(UpdateIncidentStudentsRequest $request, int $incident): JsonResponse
+    public function updateStudents(UpdateIncidentStudentsRequest $request, int $incident, AuditLogger $auditLogger): JsonResponse
     {
         $incidentModel = $this->findIncident($incident);
 
@@ -166,13 +186,27 @@ class IncidentController extends Controller
         $data = $request->validated();
 
         foreach ($data['students'] as $entry) {
+            $newStatus = $entry['present'] ? 'PRESENTE' : 'AUSENTE';
+            $previousStatus = $incidentModel->students()->where('users.id', $entry['student_id'])->first()?->pivot->status;
+
             $incidentModel->students()->syncWithoutDetaching([
                 $entry['student_id'] => [
-                    'status' => $entry['present'] ? 'PRESENTE' : 'AUSENTE',
+                    'status' => $newStatus,
                     'checked_by_user_id' => $request->user()->id,
                     'checked_at' => now(),
                 ],
             ]);
+
+            if ($previousStatus !== $newStatus) {
+                $auditLogger->log(
+                    'incident',
+                    $incidentModel->id,
+                    'UPDATE',
+                    $request->user()->id,
+                    ['student_id' => $entry['student_id'], 'status' => $previousStatus],
+                    ['student_id' => $entry['student_id'], 'status' => $newStatus],
+                );
+            }
         }
 
         $incidentModel->load('students');

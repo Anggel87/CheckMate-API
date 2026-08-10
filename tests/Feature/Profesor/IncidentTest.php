@@ -23,6 +23,37 @@ test('creates an incident and seeds the emergency checklist for the given groups
     $this->assertDatabaseHas('incident_students', ['student_id' => $student->id, 'status' => 'DESCONOCIDO']);
 });
 
+test('records a history trail as an incident is created, edited and its checklist updated', function () {
+    ['teacher' => $teacher, 'group' => $group] = makeTeacherWithSchedule();
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $created = $this->postJson('/api/v1/profesor/incidents', [
+        'type' => 'FIRE',
+        'title' => 'Conato de incendio',
+        'severity' => 'ALTA',
+        'group_ids' => [$group->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $incidentId = $created->json('data.id');
+
+    $this->putJson("/api/v1/profesor/incidents/{$incidentId}", [
+        'title' => 'Conato de incendio controlado',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $this->patchJson("/api/v1/profesor/incidents/{$incidentId}/students", [
+        'students' => [['student_id' => $student->id, 'present' => true]],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response = $this->getJson("/api/v1/profesor/incidents/{$incidentId}", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(3, 'data.history');
+    expect($response->json('data.history.0.action'))->toBe('CREATE');
+    expect($response->json('data.history.1.after.title'))->toBe('Conato de incendio controlado');
+    expect($response->json('data.history.2.after.status'))->toBe('PRESENTE');
+});
+
 test('lists only incidents reported by the teacher', function () {
     ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule();
     $mine = Incident::factory()->create(['reported_by_user_id' => $teacher->id, 'schedule_id' => $schedule->id]);

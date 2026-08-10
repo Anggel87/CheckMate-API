@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Director;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\LoadsIncidentHistory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Requests\Director\CloseIncidentRequest;
@@ -15,6 +16,7 @@ use App\Http\Resources\IncidentResource;
 use App\Models\Incident;
 use App\Models\Schedule;
 use App\Models\User;
+use App\Services\AuditLogger;
 use App\Services\Director\CareerScope;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +24,7 @@ use Illuminate\Http\Request;
 
 class IncidentController extends Controller
 {
-    use ApiResponse, ValidatesEvidenceFile;
+    use ApiResponse, LoadsIncidentHistory, ValidatesEvidenceFile;
 
     public function index(Request $request, CareerScope $scope): JsonResponse
     {
@@ -68,11 +70,12 @@ class IncidentController extends Controller
         $incidentModel = $this->findIncident($request->user(), $incident, $scope);
 
         $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente obtenido correctamente.', new IncidentDetailResource($incidentModel));
     }
 
-    public function store(StoreIncidentRequest $request, CareerScope $scope): JsonResponse
+    public function store(StoreIncidentRequest $request, CareerScope $scope, AuditLogger $auditLogger): JsonResponse
     {
         $director = $request->user();
         $careerIds = $scope->assertHasCareer($director);
@@ -113,10 +116,19 @@ class IncidentController extends Controller
 
         $incident->load(['reporter', 'schedule.group', 'students']);
 
+        $auditLogger->log('incident', $incident->id, 'CREATE', $director->id, null, [
+            'type' => $incident->type,
+            'title' => $incident->title,
+            'severity' => $incident->severity,
+            'status' => $incident->status,
+        ]);
+
+        $this->loadIncidentHistory($incident);
+
         return $this->successResponse('Incidente creado correctamente.', new IncidentDetailResource($incident), 201);
     }
 
-    public function update(UpdateIncidentRequest $request, int $incident, CareerScope $scope): JsonResponse
+    public function update(UpdateIncidentRequest $request, int $incident, CareerScope $scope, AuditLogger $auditLogger): JsonResponse
     {
         $incidentModel = $this->findIncident($request->user(), $incident, $scope);
 
@@ -130,14 +142,22 @@ class IncidentController extends Controller
             $data['evidence'] = $request->file('evidence')->store('incidents', 'public');
         }
 
-        $incidentModel->update(array_intersect_key($data, array_flip(['type', 'title', 'description', 'severity', 'evidence'])));
+        $editableFields = array_intersect_key($data, array_flip(['type', 'title', 'description', 'severity', 'evidence']));
+        $before = $incidentModel->only(array_keys($editableFields));
+
+        $incidentModel->update($editableFields);
+
+        if ($editableFields !== []) {
+            $auditLogger->log('incident', $incidentModel->id, 'UPDATE', $request->user()->id, $before, $incidentModel->only(array_keys($editableFields)));
+        }
 
         $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente actualizado correctamente.', new IncidentDetailResource($incidentModel));
     }
 
-    public function updateStudents(UpdateIncidentStudentsRequest $request, int $incident, CareerScope $scope): JsonResponse
+    public function updateStudents(UpdateIncidentStudentsRequest $request, int $incident, CareerScope $scope, AuditLogger $auditLogger): JsonResponse
     {
         $incidentModel = $this->findIncident($request->user(), $incident, $scope);
 
@@ -146,6 +166,8 @@ class IncidentController extends Controller
         $data = $request->validated();
 
         foreach ($data['students'] as $entry) {
+            $previousStatus = $incidentModel->students()->where('users.id', $entry['student_id'])->first()?->pivot->status;
+
             $incidentModel->students()->syncWithoutDetaching([
                 $entry['student_id'] => [
                     'status' => $entry['status'],
@@ -154,6 +176,17 @@ class IncidentController extends Controller
                     'checked_at' => now(),
                 ],
             ]);
+
+            if ($previousStatus !== $entry['status']) {
+                $auditLogger->log(
+                    'incident',
+                    $incidentModel->id,
+                    'UPDATE',
+                    $request->user()->id,
+                    ['student_id' => $entry['student_id'], 'status' => $previousStatus],
+                    ['student_id' => $entry['student_id'], 'status' => $entry['status']],
+                );
+            }
         }
 
         return $this->successResponse('Lista de emergencia actualizada correctamente.', [
@@ -162,7 +195,7 @@ class IncidentController extends Controller
         ]);
     }
 
-    public function close(CloseIncidentRequest $request, int $incident, CareerScope $scope): JsonResponse
+    public function close(CloseIncidentRequest $request, int $incident, CareerScope $scope, AuditLogger $auditLogger): JsonResponse
     {
         $director = $request->user();
         $incidentModel = $this->findIncident($director, $incident, $scope);
@@ -171,11 +204,21 @@ class IncidentController extends Controller
 
         $data = $request->validated();
         $status = $data['resolution'] === 'RESOLVED' ? 'RESUELTO' : 'CANCELADO';
+        $previousStatus = $incidentModel->status;
 
         $incidentModel->update([
             'status' => $status,
             'reviewed_by_user_id' => $director->id,
         ]);
+
+        $auditLogger->log(
+            'incident',
+            $incidentModel->id,
+            'UPDATE',
+            $director->id,
+            ['status' => $previousStatus],
+            ['status' => $status, 'reviewed_by_user_id' => $director->id],
+        );
 
         return $this->successResponse('Incidente cerrado correctamente.', [
             'id' => $incidentModel->id,

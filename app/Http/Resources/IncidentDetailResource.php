@@ -41,6 +41,7 @@ class IncidentDetailResource extends JsonResource
                 'present' => $student->pivot->status === 'PRESENTE',
             ]),
             'evidence_url' => $this->evidence ? Storage::url($this->evidence) : null,
+            'history' => $this->when(isset($this->history), fn () => $this->history),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }

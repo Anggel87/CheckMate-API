@@ -22,6 +22,38 @@ test('creates an incident within the director career', function () {
     $this->assertDatabaseHas('incidents', ['schedule_id' => $schedule->id, 'reviewed_by_user_id' => $director->id]);
 });
 
+test('records a history trail including the closing resolution', function () {
+    ['director' => $director, 'group' => $group] = makeCareerDirector();
+    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+
+    $token = fakeGovernanceAuth($director);
+
+    $created = $this->postJson('/api/v1/director-carrera/incidents', [
+        'type' => 'FIRE',
+        'title' => 'Conato de incendio',
+        'severity' => 'ALTA',
+        'schedule_id' => $schedule->id,
+        'student_ids' => [$student->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $incidentId = $created->json('data.id');
+
+    $this->patchJson("/api/v1/director-carrera/incidents/{$incidentId}/students", [
+        'students' => [['student_id' => $student->id, 'status' => 'SEGURO']],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $this->postJson("/api/v1/director-carrera/incidents/{$incidentId}/close", [
+        'resolution' => 'RESOLVED',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response = $this->getJson("/api/v1/director-carrera/incidents/{$incidentId}", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(3, 'data.history');
+    expect($response->json('data.history.1.after.status'))->toBe('SEGURO');
+    expect($response->json('data.history.2.after.status'))->toBe('RESUELTO');
+});
+
 test('rejects an incident for a schedule outside the director career', function () {
     ['director' => $director] = makeCareerDirector();
     $otherGroup = makeActiveGroup();
