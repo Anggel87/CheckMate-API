@@ -179,7 +179,7 @@ si el rol no es administrador).
 | 5.4 | `DeviceAuthService` (token + MAC) | ❌ | **Descartado a propósito.** El usuario decidió, para este prototipo, que el endpoint que usa el ESP32 no lleve ninguna autenticación (ahorra tiempo/hardware). El device se identifica solo con su `mac_address` en el body. Ver 6.10 |
 | 5.5 | Middleware `device.auth` | ❌ | Mismo motivo que 5.4 — no aplica, el endpoint del ESP32 es público a propósito |
 | 5.6 | Endpoint `POST /device/heartbeat` | ⏳ | No pedido todavía, se agrega barato cuando haga falta |
-| 5.7 | Comando `device:register {mac_address} {classroom_id}` | ✅ | Alta/actualización rápida de un device real sin esperar al CRUD de admin (5.3). Mismo espíritu que `governance:link-students` |
+| 5.7 | Comando `device:register {mac_address} {classroom_id}` | ✅ | Alta/actualización rápida de un device real sin esperar al CRUD de admin (5.3). Mismo espíritu que `governance:link-users` |
 
 ---
 
@@ -260,7 +260,7 @@ si el rol no es administrador).
 | 8.7 | `GET /api/v1/alumno/subjects[/{id}][/attendance]` | ✅ | `SubjectController`, `ScheduleFormatter` |
 | 8.8 | Tests Pest (`tests/Feature/Alumno/*`) | ✅ | 21 tests, `Http::fake()` simula `GET {governance}/auth/me` |
 | 8.9 | Aprobación de justificantes (tutor académico, §8.2) | ✅ | Migración y flujo de aprobación se construyeron en el Módulo 7 (`Tutor\JustificationController`). `JustificationResource` de Alumno actualizado para mostrar `reviewed_by`/`reviewed_at`/`comment` reales (antes los devolvía hardcodeados en `null`) |
-| 8.10 | Comando `governance:link-students` | ✅ | Crea en gobernanza los alumnos sembrados sin `governance_user_id` y los enlaza. Opcional, no forma parte de `migrate:fresh --seed` porque requiere gobernanza corriendo |
+| 8.10 | Comando `governance:link-users` | ✅ | Crea en gobernanza los 5 usuarios de `SimpleUserSeeder` (uno por rol) más 3 alumnos sembrados extra, y los enlaza. No recorre toda la tabla `users` a propósito (sería muy lento). Opcional, no forma parte de `migrate:fresh --seed` porque requiere gobernanza corriendo |
 | 8.11 | `AttendanceSeeder` | ✅ | Sí forma parte de `migrate:fresh --seed` (no depende de servicios externos). Un horario por grupo, una sesión pasada por horario, asistencia por alumno del grupo (~20 registros totales, mezcla `PRESENTE`/`RETARDO`/`FALTA`) |
 
 **Limitaciones conocidas (ver plan de implementación para detalle):**

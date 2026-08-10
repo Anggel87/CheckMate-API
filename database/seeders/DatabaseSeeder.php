@@ -32,6 +32,7 @@ class DatabaseSeeder extends Seeder
             JustificationSeeder::class,
             AppNotificationSeeder::class,
             UserPermissionOverrideSeeder::class,
+            SimpleUserSeeder::class,
         ]);
     }
 }
