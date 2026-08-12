@@ -16,6 +16,7 @@ class AttendanceRecordResource extends JsonResource
     {
         return [
             'attendance_id' => $this->id,
+            'subject_id' => $this->schedule->subject_id,
             'date' => $this->registered_at->format('Y-m-d'),
             'status' => $this->status,
             'justifiable' => $this->status === 'FALTA' && ! $this->justification,

@@ -20,6 +20,7 @@ Route::prefix('alumno')
         Route::get('/justifications/{justification}', [JustificationController::class, 'show'])->name('justifications.show');
 
         Route::get('/subjects', [SubjectController::class, 'index'])->name('subjects.index');
+        Route::get('/attendance', [SubjectController::class, 'allAttendance'])->name('attendance.index');
         Route::get('/subjects/{subject}', [SubjectController::class, 'show'])->name('subjects.show');
         Route::get('/subjects/{subject}/attendance', [SubjectController::class, 'attendance'])->name('subjects.attendance');
         Route::post('/subjects/{subject}/attendance/{attendance}/justify', [JustificationController::class, 'store'])->name('subjects.attendance.justify');

@@ -36,6 +36,7 @@ Route::prefix('director-carrera')->middleware(['governance.auth', 'role:director
     Route::get('claims/{claim}', [ClaimController::class, 'show']);
     Route::patch('claims/{claim}/action', [ClaimController::class, 'action']);
 
+    Route::get('charts/summary', [ChartController::class, 'summary']);
     Route::get('charts/general', [ChartController::class, 'general']);
     Route::get('charts/incidents', [ChartController::class, 'incidents']);
     Route::get('charts/absences', [ChartController::class, 'absences']);

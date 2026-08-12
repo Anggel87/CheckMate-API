@@ -20,17 +20,54 @@ class SubjectController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $schedules = $this->activeSchedulesForGroup($request->user()->group_id)
+        $user = $request->user();
+
+        $schedules = $this->activeSchedulesForGroup($user->group_id)
             ->with(['subject', 'teacher'])
             ->get()
             ->groupBy('subject_id');
 
-        $subjects = $schedules->map(fn ($group) => (object) [
-            'subject' => $group->first()->subject,
-            'schedules' => $group,
-        ])->values();
+        $summariesBySubject = $user->attendances()
+            ->join('schedules', 'schedules.id', '=', 'attendances.schedule_id')
+            ->whereIn('schedules.subject_id', $schedules->keys())
+            ->selectRaw('schedules.subject_id, attendances.status, count(*) as total')
+            ->groupBy('schedules.subject_id', 'attendances.status')
+            ->get()
+            ->groupBy('subject_id');
+
+        $subjects = $schedules->map(function ($group, $subjectId) use ($summariesBySubject) {
+            $counts = $summariesBySubject->get($subjectId, collect())->pluck('total', 'status');
+
+            return (object) [
+                'subject' => $group->first()->subject,
+                'schedules' => $group,
+                'attendanceSummary' => [
+                    'on_time' => (int) ($counts['PRESENTE'] ?? 0),
+                    'late' => (int) ($counts['RETARDO'] ?? 0),
+                    'absent' => (int) ($counts['FALTA'] ?? 0),
+                ],
+            ];
+        })->values();
 
         return $this->successResponse('Materias obtenidas correctamente.', SubjectResource::collection($subjects));
+    }
+
+    /**
+     * Returns every attendance record across all of the student's subjects in a single
+     * query, so the frontend doesn't need to request each subject's history separately.
+     */
+    public function allAttendance(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $scheduleIds = $this->activeSchedulesForGroup($user->group_id)->pluck('id');
+
+        $attendances = $user->attendances()
+            ->whereIn('schedule_id', $scheduleIds)
+            ->with(['schedule', 'justification'])
+            ->latest('registered_at')
+            ->get();
+
+        return $this->successResponse('Asistencias obtenidas correctamente.', AttendanceRecordResource::collection($attendances));
     }
 
     public function show(Request $request, Subject $subject): JsonResponse
@@ -79,7 +116,7 @@ class SubjectController extends Controller
 
         $attendances = $user->attendances()
             ->whereHas('schedule', fn ($query) => $query->where('subject_id', $subject->id))
-            ->with('justification')
+            ->with(['schedule', 'justification'])
             ->latest('registered_at')
             ->get();
 

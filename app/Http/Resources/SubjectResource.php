@@ -7,7 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Wraps a stdClass with ->subject (Subject) and ->schedules (Collection<Schedule>).
+ * Wraps a stdClass with ->subject (Subject), ->schedules (Collection<Schedule>)
+ * and optionally ->attendanceSummary (array{on_time:int,late:int,absent:int}).
  */
 class SubjectResource extends JsonResource
 {
@@ -26,6 +27,7 @@ class SubjectResource extends JsonResource
                 'full_name' => $teacher->fullName(),
             ],
             'schedule' => ScheduleFormatter::summarize($this->schedules),
+            'attendance_summary' => $this->attendanceSummary ?? null,
         ];
     }
 }

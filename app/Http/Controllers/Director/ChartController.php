@@ -19,6 +19,43 @@ class ChartController extends Controller
 
     public function general(Request $request, CareerScope $scope): JsonResponse
     {
+        return $this->successResponse('Resumen general obtenido correctamente.', $this->generalData($request, $scope));
+    }
+
+    public function incidents(Request $request, CareerScope $scope): JsonResponse
+    {
+        return $this->successResponse('Estadísticas de incidentes obtenidas correctamente.', $this->incidentsData($request, $scope));
+    }
+
+    public function absences(Request $request, CareerScope $scope): JsonResponse
+    {
+        return $this->successResponse('Tendencias de inasistencias obtenidas correctamente.', $this->absencesData($request, $scope));
+    }
+
+    public function justifications(Request $request, CareerScope $scope): JsonResponse
+    {
+        return $this->successResponse('Estado de justificantes obtenido correctamente.', $this->justificationsData($request, $scope));
+    }
+
+    /**
+     * Combines the four chart datasets in a single response so the dashboard
+     * doesn't need to fire four separate requests to render its charts.
+     */
+    public function summary(Request $request, CareerScope $scope): JsonResponse
+    {
+        return $this->successResponse('Resumen de graficas obtenido correctamente.', [
+            'general' => $this->generalData($request, $scope),
+            'incidents' => $this->incidentsData($request, $scope),
+            'absences' => $this->absencesData($request, $scope),
+            'justifications' => $this->justificationsData($request, $scope),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function generalData(Request $request, CareerScope $scope): array
+    {
         $careerIds = $scope->assertHasCareer($request->user());
         $groupIds = $scope->groupIds($careerIds);
 
@@ -32,7 +69,7 @@ class ChartController extends Controller
         $totalAttendances = $summary->sum();
         $present = (int) ($summary['PRESENTE'] ?? 0);
 
-        return $this->successResponse('Resumen general obtenido correctamente.', [
+        return [
             'total_students' => $totalStudents,
             'attendance_summary' => [
                 'PRESENTE' => (int) ($summary['PRESENTE'] ?? 0),
@@ -41,24 +78,30 @@ class ChartController extends Controller
                 'JUSTIFICADA' => (int) ($summary['JUSTIFICADA'] ?? 0),
             ],
             'attendance_rate' => $totalAttendances > 0 ? round($present / $totalAttendances, 4) : 0,
-        ]);
+        ];
     }
 
-    public function incidents(Request $request, CareerScope $scope): JsonResponse
+    /**
+     * @return array<string, mixed>
+     */
+    private function incidentsData(Request $request, CareerScope $scope): array
     {
         $careerIds = $scope->assertHasCareer($request->user());
         $groupIds = $scope->groupIds($careerIds);
 
         $incidents = Incident::whereHas('schedule', fn ($query) => $query->whereIn('group_id', $groupIds));
 
-        return $this->successResponse('Estadísticas de incidentes obtenidas correctamente.', [
+        return [
             'total' => (clone $incidents)->count(),
             'by_severity' => (clone $incidents)->selectRaw('severity, count(*) as total')->groupBy('severity')->pluck('total', 'severity'),
             'by_status' => (clone $incidents)->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'),
-        ]);
+        ];
     }
 
-    public function absences(Request $request, CareerScope $scope): JsonResponse
+    /**
+     * @return array<string, mixed>
+     */
+    private function absencesData(Request $request, CareerScope $scope): array
     {
         $careerIds = $scope->assertHasCareer($request->user());
         $groupIds = $scope->groupIds($careerIds);
@@ -89,13 +132,16 @@ class ChartController extends Controller
                 'total' => (int) $row->total,
             ]);
 
-        return $this->successResponse('Tendencias de inasistencias obtenidas correctamente.', [
+        return [
             'by_group' => $byGroup,
             'by_subject' => $bySubject,
-        ]);
+        ];
     }
 
-    public function justifications(Request $request, CareerScope $scope): JsonResponse
+    /**
+     * @return array<string, mixed>
+     */
+    private function justificationsData(Request $request, CareerScope $scope): array
     {
         $careerIds = $scope->assertHasCareer($request->user());
         $groupIds = $scope->groupIds($careerIds);
@@ -105,13 +151,13 @@ class ChartController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        return $this->successResponse('Estado de justificantes obtenido correctamente.', [
+        return [
             'by_status' => [
                 'PENDIENTE' => (int) ($summary['PENDIENTE'] ?? 0),
                 'ACEPTADO' => (int) ($summary['ACEPTADO'] ?? 0),
                 'RECHAZADO' => (int) ($summary['RECHAZADO'] ?? 0),
             ],
-        ]);
+        ];
     }
 
     /**
