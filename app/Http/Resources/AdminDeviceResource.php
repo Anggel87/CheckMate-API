@@ -18,6 +18,11 @@ class AdminDeviceResource extends JsonResource
             'ip' => $this->ip,
             'is_active' => $this->is_active,
             'classroom_id' => $this->classroom_id,
+            'classroom' => $this->whenLoaded('classroom', fn () => [
+                'id' => $this->classroom->id,
+                'name' => $this->classroom->name,
+                'building' => $this->classroom->building,
+            ]),
         ];
     }
 }

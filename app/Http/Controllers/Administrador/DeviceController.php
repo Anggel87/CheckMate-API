@@ -25,6 +25,7 @@ class DeviceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $devices = Device::query()
+            ->with('classroom')
             ->when($request->query('classroom_id'), fn ($query, $classroomId) => $query->where('classroom_id', $classroomId))
             ->when($request->has('is_active'), fn ($query) => $query->where('is_active', $request->boolean('is_active')))
             ->get();
@@ -34,7 +35,7 @@ class DeviceController extends Controller
 
     public function show(int $device): JsonResponse
     {
-        $model = Device::find($device);
+        $model = Device::with('classroom')->find($device);
 
         if ($model === null) {
             throw ApiException::notFound('El dispositivo solicitado no existe.', 'DEV01');
@@ -72,7 +73,7 @@ class DeviceController extends Controller
 
         $auditLogger->log('device', $device->id, 'CREATE', $request->user()->id, null, $device->only(self::AUDIT_FIELDS));
 
-        return $this->successResponse('Dispositivo creado correctamente.', new AdminDeviceResource($device), 201);
+        return $this->successResponse('Dispositivo creado correctamente.', new AdminDeviceResource($device->load('classroom')), 201);
     }
 
     public function update(UpdateDeviceRequest $request, int $device, AuditLogger $auditLogger): JsonResponse
@@ -94,7 +95,7 @@ class DeviceController extends Controller
 
         $auditLogger->log('device', $model->id, 'UPDATE', $request->user()->id, $before, $model->only(self::AUDIT_FIELDS));
 
-        return $this->successResponse('Dispositivo actualizado correctamente.', new AdminDeviceResource($model));
+        return $this->successResponse('Dispositivo actualizado correctamente.', new AdminDeviceResource($model->load('classroom')));
     }
 
     public function destroy(Request $request, int $device, AuditLogger $auditLogger): JsonResponse

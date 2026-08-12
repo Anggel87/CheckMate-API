@@ -3,6 +3,109 @@
 use App\Models\Attendance;
 use App\Models\Justification;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+
+test('creates a justification on behalf of a student in the tutor groups', function () {
+    Storage::fake('public');
+
+    $group = makeActiveGroup();
+    $tutor = makeTutorForGroup($group);
+    $schedule = makeActiveSchedule($group);
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->post("/api/v1/tutor/students/{$student->id}/justifications", [
+        'attendance_id' => $attendance->id,
+        'reason' => 'El alumno presento una cita medica ese dia.',
+        'evidence' => UploadedFile::fake()->create('evidencia.pdf', 100, 'application/pdf'),
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()->assertJsonPath('data.status', 'PENDIENTE');
+
+    $this->assertDatabaseHas('justifications', [
+        'attendance_id' => $attendance->id,
+        'justified_by_user_id' => $tutor->id,
+        'status' => 'PENDIENTE',
+    ]);
+});
+
+test('allows creating a tutor justification without evidence', function () {
+    $group = makeActiveGroup();
+    $tutor = makeTutorForGroup($group);
+    $schedule = makeActiveSchedule($group);
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->postJson("/api/v1/tutor/students/{$student->id}/justifications", [
+        'attendance_id' => $attendance->id,
+        'reason' => 'El alumno presento una cita medica ese dia.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated();
+});
+
+test('rejects creating a justification for a student outside the tutor groups', function () {
+    $group = makeActiveGroup();
+    $tutor = makeTutorForGroup($group);
+
+    $otherGroup = makeActiveGroup();
+    $otherSchedule = makeActiveSchedule($otherGroup);
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $otherGroup->id]);
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $otherSchedule->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->postJson("/api/v1/tutor/students/{$student->id}/justifications", [
+        'attendance_id' => $attendance->id,
+        'reason' => 'Fuera del grupo del tutor.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+});
+
+test('rejects creating a justification for an attendance that is not absent', function () {
+    $group = makeActiveGroup();
+    $tutor = makeTutorForGroup($group);
+    $schedule = makeActiveSchedule($group);
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $attendance = Attendance::factory()->present()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->postJson("/api/v1/tutor/students/{$student->id}/justifications", [
+        'attendance_id' => $attendance->id,
+        'reason' => 'Intento justificar una asistencia presente.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertStatus(409)->assertJsonPath('error_code', 'ATT04');
+});
+
+test('rejects creating a duplicate justification for the same attendance', function () {
+    $group = makeActiveGroup();
+    $tutor = makeTutorForGroup($group);
+    $schedule = makeActiveSchedule($group);
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    Justification::factory()->create(['attendance_id' => $attendance->id, 'justified_by_user_id' => $student->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->postJson("/api/v1/tutor/students/{$student->id}/justifications", [
+        'attendance_id' => $attendance->id,
+        'reason' => 'Ya tiene un justificante este registro.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertStatus(409)->assertJsonPath('error_code', 'JUST03');
+});
 
 test('approves a pending justification and marks the attendance as justified', function () {
     $group = makeActiveGroup();

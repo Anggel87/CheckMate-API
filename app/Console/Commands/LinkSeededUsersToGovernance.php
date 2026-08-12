@@ -30,19 +30,6 @@ class LinkSeededUsersToGovernance extends Command
      */
     private const EXTRA_STUDENTS = 3;
 
-    /**
-     * Mapea el nombre de rol local (tabla `roles`) al nombre de rol que espera gobernanza.
-     *
-     * @var array<string, string>
-     */
-    private const GOVERNANCE_ROLES = [
-        'alumno' => 'alumno',
-        'profesor' => 'profesor',
-        'tutor_academico' => 'tutor_academico',
-        'administrador' => 'administrator',
-        'director_carrera' => 'career_director',
-    ];
-
     public function handle(GovernanceClient $governance): int
     {
         $demoUsers = User::with('role')
@@ -68,19 +55,11 @@ class LinkSeededUsersToGovernance extends Command
         $rows = [];
 
         foreach ($users as $user) {
-            $governanceRole = self::GOVERNANCE_ROLES[$user->role->name] ?? null;
-
-            if ($governanceRole === null) {
-                $this->components->warn("Se omitió {$user->email}: el rol local '{$user->role->name}' no tiene equivalente en gobernanza.");
-
-                continue;
-            }
-
             try {
                 $response = $governance->createUser([
                     'name' => $user->fullName(),
                     'email' => $user->email,
-                    'role' => $governanceRole,
+                    'role' => $user->role->name,
                     'active' => true,
                 ]);
             } catch (ConnectionException $e) {

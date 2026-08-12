@@ -33,13 +33,13 @@ X-Client-Secret: governance-web-secret
 }
 ```
 
-Roles soportados:
+Roles soportados (`key_name` en la tabla `roles` de gobernanza; coinciden 1:1 con `roles.name` de CheckMate-API):
 
 - `profesor`
 - `tutor_academico`
 - `alumno`
-- `administrator`
-- `career_director`
+- `administrador`
+- `director_carrera`
 
 ## Contrasena Temporal
 

@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
             AppNotificationSeeder::class,
             UserPermissionOverrideSeeder::class,
             SimpleUserSeeder::class,
+            DemoAccountEnrichmentSeeder::class,
         ]);
     }
 }

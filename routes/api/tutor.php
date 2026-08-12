@@ -12,5 +12,6 @@ Route::prefix('tutor')
         Route::get('/claims/{claim}', [ClaimController::class, 'show'])->name('claims.show');
         Route::patch('/claims/{claim}/action', [ClaimController::class, 'action'])->name('claims.action');
 
+        Route::post('/students/{student}/justifications', [JustificationController::class, 'store'])->name('students.justifications.store');
         Route::patch('/students/{student}/justifications/{justification}', [JustificationController::class, 'update'])->name('students.justifications.update');
     });
