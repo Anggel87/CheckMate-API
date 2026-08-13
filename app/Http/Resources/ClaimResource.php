@@ -15,18 +15,18 @@ class ClaimResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $schedule = $this->attendance->schedule;
+        $schedule = $this->attendance?->schedule;
 
         return [
             'id' => $this->id,
-            'subject' => [
+            'subject' => $schedule ? [
                 'id' => $schedule->subject->id,
                 'name' => $schedule->subject->name,
-            ],
-            'teacher' => [
+            ] : null,
+            'teacher' => $schedule ? [
                 'id' => $schedule->teacher->id,
                 'full_name' => $schedule->teacher->fullName(),
-            ],
+            ] : null,
             'description' => $this->description,
             'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'status' => $this->status,

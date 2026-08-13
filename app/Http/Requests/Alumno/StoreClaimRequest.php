@@ -17,7 +17,7 @@ class StoreClaimRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'subject_id' => ['required', 'integer', 'min:1', 'exists:subjects,id'],
+            'subject_id' => ['nullable', 'integer', 'min:1', 'exists:subjects,id'],
             'description' => ['required', 'string', 'min:10', 'max:500'],
             'evidence' => ['nullable', 'file'],
         ];
@@ -29,7 +29,6 @@ class StoreClaimRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'subject_id.required' => 'Debes indicar la materia del reclamo.',
             'subject_id.exists' => 'La materia indicada no existe.',
             'description.required' => 'Debes describir el reclamo.',
             'description.min' => 'La descripción debe tener al menos 10 caracteres.',

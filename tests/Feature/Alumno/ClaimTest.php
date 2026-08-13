@@ -89,5 +89,37 @@ test('validates required fields when creating a claim', function () {
 
     $response->assertUnprocessable()
         ->assertJsonPath('error_code', 'VAL01')
-        ->assertJsonValidationErrors(['subject_id', 'description']);
+        ->assertJsonValidationErrors(['description']);
+});
+
+test('creates a general claim without a subject', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->postJson('/api/v1/alumno/claims', [
+        'description' => 'El baño de la planta baja no sirve desde hace una semana.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.subject', null)
+        ->assertJsonPath('data.status', 'PENDIENTE');
+
+    $this->assertDatabaseHas('claims', [
+        'tutor_id' => $student->id,
+        'attendance_id' => null,
+        'director_id' => $group->career->director_id,
+        'description' => 'El baño de la planta baja no sirve desde hace una semana.',
+    ]);
+});
+
+test('rejects creating a general claim when the student has no group', function () {
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => null]);
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->postJson('/api/v1/alumno/claims', [
+        'description' => 'Reclamo general sin grupo asignado.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertStatus(409)->assertJsonPath('error_code', 'GRP05');
 });

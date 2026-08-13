@@ -21,8 +21,10 @@ class TutorClaimResource extends JsonResource
     public function toArray(Request $request): array
     {
         $student = $this->tutor; // claims.tutor_id guarda al alumno que reclama, no a un tutor familiar
-        $schedule = $this->attendance->schedule;
-        $group = $schedule->group;
+        $schedule = $this->attendance?->schedule;
+        // Reclamos generales (sin materia) no tienen schedule; se usa el grupo
+        // actual del alumno para poder mostrar/filtrar igual por grupo y carrera.
+        $group = $schedule?->group ?? $student->group;
 
         return [
             'id' => $this->id,
@@ -30,20 +32,20 @@ class TutorClaimResource extends JsonResource
                 'id' => $student->id,
                 'full_name' => $student->fullName(),
             ],
-            'group' => [
+            'group' => $group ? [
                 'id' => $group->id,
                 'grade' => $group->grade,
                 'section' => $group->section,
-            ],
-            'career' => [
+            ] : null,
+            'career' => $group?->career ? [
                 'id' => $group->career->id,
                 'name' => $group->career->name,
                 'short_name' => $group->career->short_name,
-            ],
-            'subject' => [
+            ] : null,
+            'subject' => $schedule ? [
                 'id' => $schedule->subject->id,
                 'name' => $schedule->subject->name,
-            ],
+            ] : null,
             'description' => $this->description,
             'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'status' => $this->status,

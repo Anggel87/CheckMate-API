@@ -67,6 +67,6 @@ class ClaimController extends Controller
     {
         return Claim::query()
             ->where('director_id', $directorId)
-            ->with(['tutor', 'attendance.schedule.subject', 'attendance.schedule.group.career']);
+            ->with(['tutor.group.career', 'attendance.schedule.subject', 'attendance.schedule.group.career']);
     }
 }

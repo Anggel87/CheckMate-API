@@ -9,6 +9,7 @@ use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Resources\ClaimResource;
 use App\Models\Claim;
 use App\Models\Schedule;
+use App\Models\User;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,29 +46,20 @@ class ClaimController extends Controller
         $user = $request->user();
         $data = $request->validated();
 
-        $this->assertEnrolledInSubject($user->group_id, (int) $data['subject_id']);
         $this->assertValidEvidence($request->file('evidence'));
 
-        // NOTA: claims.attendance_id es NN pero el .md no manda un attendance_id en el
-        // body de este endpoint; se usa el registro de asistencia más reciente de esa
-        // materia como el que se está reclamando. Ver limitación documentada.
-        $attendance = $user->attendances()
-            ->whereHas('schedule', fn ($query) => $query->where('subject_id', $data['subject_id']))
-            ->latest('registered_at')
-            ->first();
-
-        if ($attendance === null) {
-            throw ApiException::conflict('No tienes registros de asistencia en esta materia para reclamar todavía.', 'ATT03');
-        }
+        [$attendanceId, $directorId] = empty($data['subject_id'])
+            ? $this->resolveGeneralClaim($user)
+            : $this->resolveSubjectClaim($user, (int) $data['subject_id']);
 
         $evidencePath = $request->hasFile('evidence')
             ? $request->file('evidence')->store('claims', 'public')
             : null;
 
         $claim = Claim::create([
-            'attendance_id' => $attendance->id,
+            'attendance_id' => $attendanceId,
             'tutor_id' => $user->id,
-            'director_id' => $attendance->schedule->group->career->director_id,
+            'director_id' => $directorId,
             'description' => $data['description'],
             'evidence' => $evidencePath,
             'status' => 'PENDIENTE',
@@ -76,6 +68,49 @@ class ClaimController extends Controller
         $claim->load(['attendance.schedule.subject', 'attendance.schedule.teacher']);
 
         return $this->successResponse('Reclamo creado correctamente.', new ClaimResource($claim), 201);
+    }
+
+    /**
+     * Reclamo ligado a una materia: exige que el alumno curse esa materia y que
+     * tenga al menos un registro de asistencia en ella (es lo que se reclama).
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function resolveSubjectClaim(User $user, int $subjectId): array
+    {
+        $this->assertEnrolledInSubject($user->group_id, $subjectId);
+
+        // NOTA: claims.attendance_id es NN pero el .md no manda un attendance_id en el
+        // body de este endpoint; se usa el registro de asistencia más reciente de esa
+        // materia como el que se está reclamando. Ver limitación documentada.
+        $attendance = $user->attendances()
+            ->whereHas('schedule', fn ($query) => $query->where('subject_id', $subjectId))
+            ->latest('registered_at')
+            ->first();
+
+        if ($attendance === null) {
+            throw ApiException::conflict('No tienes registros de asistencia en esta materia para reclamar todavía.', 'ATT03');
+        }
+
+        return [$attendance->id, $attendance->schedule->group->career->director_id];
+    }
+
+    /**
+     * Reclamo general (quejas no ligadas a una materia, ej. instalaciones o una
+     * situación con otro alumno): no hay asistencia que reclamar, se enruta
+     * directo al director de la carrera del alumno.
+     *
+     * @return array{0: null, 1: int}
+     */
+    private function resolveGeneralClaim(User $user): array
+    {
+        $group = $user->group()->with('career')->first();
+
+        if ($group === null) {
+            throw ApiException::conflict('No tienes un grupo asignado para enviar reclamos.', 'GRP05');
+        }
+
+        return [null, $group->career->director_id];
     }
 
     private function assertEnrolledInSubject(?int $groupId, int $subjectId): void
