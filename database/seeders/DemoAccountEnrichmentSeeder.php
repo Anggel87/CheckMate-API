@@ -5,8 +5,8 @@ namespace Database\Seeders;
 use App\Models\AcademicTutor;
 use App\Models\Attendance;
 use App\Models\Career;
-use App\Models\ClassSession;
 use App\Models\Claim;
+use App\Models\ClassSession;
 use App\Models\Device;
 use App\Models\Group;
 use App\Models\Incident;
@@ -15,6 +15,7 @@ use App\Models\Schedule;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DemoAccountEnrichmentSeeder extends Seeder
@@ -47,7 +48,10 @@ class DemoAccountEnrichmentSeeder extends Seeder
             return;
         }
 
-        $group = Group::find(2);
+        $group = Group::query()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->first();
 
         if (! $group) {
             return;
@@ -57,16 +61,36 @@ class DemoAccountEnrichmentSeeder extends Seeder
         $this->linkStudentToGroup($alumno, $group->id);
         $this->linkAcademicTutorToGroup($tutorAcademico, $group->id);
 
-        $scheduleIds = [2, 8, 14, 20, 26];
+        $demoScheduleId = Schedule::query()
+            ->where('group_id', $group->id)
+            ->where('teacher_id', User::where('email', 'teacher@checkmate.test')->value('id'))
+            ->orderBy('id')
+            ->value('id');
+
+        $scheduleIds = Schedule::query()
+            ->where('group_id', $group->id)
+            ->where('is_active', true)
+            ->when($demoScheduleId !== null, fn ($query) => $query->where('id', '!=', $demoScheduleId))
+            ->orderBy('id')
+            ->take(5)
+            ->pluck('id')
+            ->all();
+
+        if ($scheduleIds === [] && $demoScheduleId !== null) {
+            $scheduleIds = [$demoScheduleId];
+        }
+
         Schedule::whereIn('id', $scheduleIds)->update(['teacher_id' => $profesor->id]);
 
-        $statusesByScheduleId = [
-            2 => 'PRESENTE',
-            8 => 'PRESENTE',
-            14 => 'RETARDO',
-            20 => 'FALTA',
-            26 => 'FALTA',
-        ];
+        $statusesByScheduleId = collect($scheduleIds)
+            ->mapWithKeys(fn (int $scheduleId, int $index) => [
+                $scheduleId => match ($index) {
+                    0, 1 => 'PRESENTE',
+                    2 => 'RETARDO',
+                    default => 'FALTA',
+                },
+            ])
+            ->all();
 
         $students = User::whereHas('role', fn ($query) => $query->where('name', 'alumno'))
             ->where('group_id', $group->id)
@@ -203,7 +227,7 @@ class DemoAccountEnrichmentSeeder extends Seeder
 
     /**
      * @param  array<int, int>  $scheduleIds
-     * @param  \Illuminate\Support\Collection<int, User>  $students
+     * @param  Collection<int, User>  $students
      */
     private function createIncident(User $profesor, array $scheduleIds, $students, User $alumno): void
     {

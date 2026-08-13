@@ -21,6 +21,9 @@ class ScheduleSeeder extends Seeder
             ->whereHas('role', fn ($query) => $query->whereIn('name', ['profesor', 'tutor_academico']))
             ->get();
         $classrooms = Classroom::all();
+        $demoTeacher = User::where('email', 'teacher@checkmate.test')->first();
+        $demoClassroom = $classrooms->firstWhere('name', 'Aula 101') ?? $classrooms->first();
+        $demoScheduleCreated = false;
 
         $days = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES'];
 
@@ -49,17 +52,21 @@ class ScheduleSeeder extends Seeder
                     $slot = collect($availableSlots)->random();
                     $usedSlots[] = $slot[0];
 
+                    $isDemoSchedule = ! $demoScheduleCreated && $demoTeacher !== null && $demoClassroom !== null;
+
                     Schedule::create([
                         'school_year_id' => $schoolYear->id,
                         'group_id' => $group->id,
-                        'teacher_id' => $teachers->random()->id,
+                        'teacher_id' => $isDemoSchedule ? $demoTeacher->id : $teachers->random()->id,
                         'subject_id' => $subject->id,
-                        'classroom_id' => $classrooms->random()->id,
+                        'classroom_id' => $isDemoSchedule ? $demoClassroom->id : $classrooms->random()->id,
                         'day_of_week' => $day,
                         'start_time' => $slot[0],
                         'end_time' => $slot[1],
                         'is_active' => true,
                     ]);
+
+                    $demoScheduleCreated = $demoScheduleCreated || $isDemoSchedule;
                 }
             }
         }
