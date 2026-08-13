@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             TutorSeeder::class,
             GroupSeeder::class,
             StudentSeeder::class,
+            SimpleUserSeeder::class,
             UserDetailSeeder::class,
             ScheduleSeeder::class,
             AttendanceSettingSeeder::class,
@@ -32,7 +33,6 @@ class DatabaseSeeder extends Seeder
             JustificationSeeder::class,
             AppNotificationSeeder::class,
             UserPermissionOverrideSeeder::class,
-            SimpleUserSeeder::class,
             DemoAccountEnrichmentSeeder::class,
         ]);
     }

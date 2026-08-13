@@ -11,10 +11,8 @@ class UserDetailSeeder extends Seeder
 {
     /**
      * UIDs de tarjetas NFC físicas reales, usados para probar el ESP32 contra la API.
-     * Cada uno se repite a propósito dentro de su grupo (nfc_uid ya no es unique
-     * mientras dura esta fase de pruebas, ver migración de user_details) — quien tenga
-     * el id más bajo entre los que comparten un UID es quien "gana" la resolución al
-     * tapear esa tarjeta.
+     * El profesor y el alumno demo tienen UIDs conocidos; el resto recibe un UID
+     * diferente para que una tarjeta nunca resuelva accidentalmente a otro usuario.
      */
     private const TEACHER_NFC_UID = 'hI5YmNeJxXygSOwlSTUsQuqiE9fie5gQ4ty5';
 
@@ -22,8 +20,6 @@ class UserDetailSeeder extends Seeder
 
     public function run(): void
     {
-        // Primero el profesor fijo, para que sea el id más bajo entre los que
-        // comparten el UID físico de profesor y así sea predecible quién resuelve el tap.
         $fixedTeacher = User::where('email', 'teacher@checkmate.test')->first();
 
         if ($fixedTeacher !== null) {
@@ -35,13 +31,17 @@ class UserDetailSeeder extends Seeder
             ->get();
 
         foreach ($teachers as $teacher) {
-            $this->giveNfcUid($teacher, self::TEACHER_NFC_UID);
+            $this->giveNfcUid($teacher, $this->generateNfcUid());
         }
 
         $students = User::whereHas('role', fn ($query) => $query->where('name', 'alumno'))->get();
+        $fixedStudent = User::where('email', 'alumno@checkmate.com')->first() ?? $students->first();
 
         foreach ($students as $student) {
-            $this->giveNfcUid($student, self::STUDENT_NFC_UID);
+            $this->giveNfcUid(
+                $student,
+                $student->is($fixedStudent) ? self::STUDENT_NFC_UID : $this->generateNfcUid()
+            );
         }
     }
 
@@ -51,5 +51,10 @@ class UserDetailSeeder extends Seeder
             ['user_id' => $user->id],
             ['nfc_uid' => $nfcUid, 'qr_uuid' => (string) Str::uuid()]
         );
+    }
+
+    private function generateNfcUid(): string
+    {
+        return strtoupper(fake()->unique()->regexify('04:[A-F0-9]{2}:[A-F0-9]{2}:[A-F0-9]{2}'));
     }
 }
