@@ -40,7 +40,7 @@ class IncidentDetailResource extends JsonResource
                 'full_name' => $student->fullName(),
                 'present' => $student->pivot->status === 'PRESENTE',
             ]),
-            'evidence_url' => $this->evidence ? Storage::url($this->evidence) : null,
+            'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'history' => $this->when(isset($this->history), fn () => $this->history),
             'created_at' => $this->created_at->toIso8601String(),
         ];

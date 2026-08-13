@@ -25,7 +25,7 @@ class AdminTeacherResource extends JsonResource
             'birth_date' => $this->birth_date?->format('Y-m-d'),
             'gender' => $this->gender,
             'active' => $this->active,
-            'photo_url' => $this->photo ? Storage::url($this->photo) : null,
+            'photo_url' => $this->photo ? Storage::disk('public')->url($this->photo) : null,
             'is_academic_tutor' => $this->whenLoaded('role', fn () => $this->role->name === 'tutor_academico'),
             'schedules_count' => $this->when(isset($this->schedules_count), $this->schedules_count),
             'tutored_groups' => $this->when(

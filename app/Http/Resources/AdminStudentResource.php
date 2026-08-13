@@ -25,7 +25,7 @@ class AdminStudentResource extends JsonResource
             'birth_date' => $this->birth_date?->format('Y-m-d'),
             'gender' => $this->gender,
             'active' => $this->active,
-            'photo_url' => $this->photo ? Storage::url($this->photo) : null,
+            'photo_url' => $this->photo ? Storage::disk('public')->url($this->photo) : null,
             'group_id' => $this->group_id,
             'tutors' => $this->whenLoaded('tutors', fn () => $this->tutors->map(fn (Tutor $tutor) => [
                 'id' => $tutor->id,

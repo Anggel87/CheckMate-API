@@ -31,7 +31,7 @@ class TeacherClaimResource extends JsonResource
                 'name' => $schedule->subject->name,
             ],
             'description' => $this->description,
-            'evidence_url' => $this->evidence ? Storage::url($this->evidence) : null,
+            'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'status' => $this->status,
             'created_at' => $this->created_at->toIso8601String(),
         ];

@@ -38,13 +38,14 @@ class TutorClaimResource extends JsonResource
             'career' => [
                 'id' => $group->career->id,
                 'name' => $group->career->name,
+                'short_name' => $group->career->short_name,
             ],
             'subject' => [
                 'id' => $schedule->subject->id,
                 'name' => $schedule->subject->name,
             ],
             'description' => $this->description,
-            'evidence_url' => $this->evidence ? Storage::url($this->evidence) : null,
+            'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'status' => $this->status,
             // No existe una tabla de auditoría de acciones sobre el reclamo todavía,
             // solo la última acción (action_by_user_id/action_at/comment). Se deja el
