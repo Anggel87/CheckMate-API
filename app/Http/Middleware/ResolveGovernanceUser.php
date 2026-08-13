@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Models\User;
 use App\Services\Governance\GovernanceClient;
 use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
@@ -46,12 +47,27 @@ class ResolveGovernanceUser
         return $next($request);
     }
 
+    /**
+     * Resolves and caches the governance user id for this token.
+     *
+     * A single browser page load fires several API requests in parallel with the same
+     * token. Without a lock, every one of them would miss a cold cache at the same time
+     * and independently call out to Gobernanza — this makes the first request after the
+     * cache expires (or the first request after login) pay that round trip once, and lets
+     * the rest wait for and reuse that same result instead of repeating it.
+     */
     private function resolveGovernanceUserId(string $token): ?int
     {
         $ttl = (int) config('services.governance.auth_cache_ttl', 120);
         $key = 'governance:auth:'.hash('sha256', $token);
 
-        return Cache::remember($key, $ttl, function () use ($token) {
+        $cached = Cache::get($key);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $resolve = fn () => Cache::remember($key, $ttl, function () use ($token) {
             try {
                 $response = $this->governance->me($token);
             } catch (RequestException|ConnectionException) {
@@ -60,5 +76,11 @@ class ResolveGovernanceUser
 
             return $response['data']['user']['id'] ?? null;
         });
+
+        try {
+            return Cache::lock('lock:'.$key, 10)->block(5, $resolve);
+        } catch (LockTimeoutException) {
+            return $resolve();
+        }
     }
 }
