@@ -100,9 +100,9 @@ class IncidentController extends Controller
         $incident = Incident::create([
             'reported_by_user_id' => $request->user()->id,
             'schedule_id' => $schedule->id,
-            'title' => $data['title'],
+            'title' => $data['title'] ?? $this->defaultTitle($data['type']),
             'description' => $data['description'] ?? null,
-            'severity' => $data['severity'],
+            'severity' => $data['severity'] ?? null,
             'evidence' => $evidencePath,
             'incident_at' => now(),
             'status' => 'ACTIVO',
@@ -165,6 +165,35 @@ class IncidentController extends Controller
 
         if ($editableFields !== []) {
             $auditLogger->log('incident', $incidentModel->id, 'UPDATE', $request->user()->id, $before, $incidentModel->only(array_keys($editableFields)));
+        }
+
+        // Un incidente puede crearse sin grupos cuando no hay tiempo de seleccionarlos;
+        // aqui se permite sumarlos despues para generar la lista de verificacion, sin
+        // duplicar a los alumnos que ya estuvieran en la lista.
+        if (! empty($data['group_ids'])) {
+            $existingStudentIds = $incidentModel->students()->pluck('users.id')->all();
+
+            foreach ($data['group_ids'] as $groupId) {
+                $group = Group::find($groupId);
+
+                if ($group === null) {
+                    continue;
+                }
+
+                foreach ($group->students()->active()->get() as $student) {
+                    if (in_array($student->id, $existingStudentIds, true)) {
+                        continue;
+                    }
+
+                    $incidentModel->students()->attach($student->id, [
+                        'status' => 'DESCONOCIDO',
+                        'checked_by_user_id' => $request->user()->id,
+                        'checked_at' => now(),
+                    ]);
+
+                    $existingStudentIds[] = $student->id;
+                }
+            }
         }
 
         $incidentModel->load(['reporter', 'schedule.group', 'students']);
@@ -237,5 +266,19 @@ class IncidentController extends Controller
         if (in_array($incident->status, ['RESUELTO', 'CANCELADO'], true)) {
             throw ApiException::conflict('El incidente ya fue cerrado y no se puede modificar.', 'INC02');
         }
+    }
+
+    private function defaultTitle(string $type): string
+    {
+        $labels = [
+            'FIRE' => 'Incendio',
+            'GAS' => 'Fuga de gas',
+            'EARTHQUAKE' => 'Sismo',
+            'OTHER' => 'Incidente',
+        ];
+
+        $label = $labels[$type] ?? 'Incidente';
+
+        return $label.' - '.now()->format('d/m/Y H:i');
     }
 }

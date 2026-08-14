@@ -979,6 +979,8 @@ Esta misma lógica de cierre la ejecuta automáticamente el comando `class-sessi
 
 `GET /students/{student}/justifications` — solo justificantes de clases de este profesor.
 
+`GET /justifications/{justification}` — detalle de un justificante puntual (motivo, evidencia, estado, revisor). 403 `PERM01` si el justificante no pertenece a un horario de este profesor.
+
 ### 10.7 Evento `AttendanceRegistered`
 
 Se dispara en 3 puntos: registro NFC manual del profesor (`performed_by` = profesor), cierre de sesión con `FALTA` autogenerada (`performed_by` = profesor si manual, `null` si cron), y tap directo del dispositivo (`performed_by` = el propio alumno). El listener `WriteAttendanceAuditLog` escribe en `audit_logs` (`entity: attendance`) de forma **síncrona pero best-effort** (si falla, solo loguea un warning, nunca revierte la asistencia ya creada).

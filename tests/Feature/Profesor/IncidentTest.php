@@ -23,6 +23,72 @@ test('creates an incident and seeds the emergency checklist for the given groups
     $this->assertDatabaseHas('incident_students', ['student_id' => $student->id, 'status' => 'DESCONOCIDO']);
 });
 
+test('creates an incident without title, severity or groups and applies a generic title', function () {
+    ['teacher' => $teacher] = makeTeacherWithSchedule();
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson('/api/v1/profesor/incidents', [
+        'type' => 'FIRE',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.status', 'ACTIVO')
+        ->assertJsonPath('data.severity', null)
+        ->assertJsonCount(0, 'data.students');
+
+    expect($response->json('data.title'))->not->toBeEmpty();
+});
+
+test('accepts a blank title and severity when editing an incident created without them', function () {
+    ['teacher' => $teacher] = makeTeacherWithSchedule();
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $created = $this->postJson('/api/v1/profesor/incidents', [
+        'type' => 'FIRE',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $incidentId = $created->json('data.id');
+
+    $response = $this->putJson("/api/v1/profesor/incidents/{$incidentId}", [
+        'title' => '',
+        'description' => '',
+        'severity' => '',
+        'type' => 'FIRE',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.title', null)
+        ->assertJsonPath('data.severity', null);
+});
+
+test('adds groups to an existing incident on edit without duplicating already checked students', function () {
+    ['teacher' => $teacher, 'group' => $group] = makeTeacherWithSchedule();
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $created = $this->postJson('/api/v1/profesor/incidents', [
+        'type' => 'FIRE',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $incidentId = $created->json('data.id');
+
+    $first = $this->putJson("/api/v1/profesor/incidents/{$incidentId}", [
+        'group_ids' => [$group->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $first->assertOk()->assertJsonCount(1, 'data.students');
+
+    $second = $this->putJson("/api/v1/profesor/incidents/{$incidentId}", [
+        'group_ids' => [$group->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $second->assertOk()->assertJsonCount(1, 'data.students');
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $incidentId, 'student_id' => $student->id, 'status' => 'DESCONOCIDO']);
+});
+
 test('records a history trail as an incident is created, edited and its checklist updated', function () {
     ['teacher' => $teacher, 'group' => $group] = makeTeacherWithSchedule();
     $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);

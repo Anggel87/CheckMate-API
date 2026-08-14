@@ -3,6 +3,8 @@
 use App\Http\Controllers\Profesor\ClaimController;
 use App\Http\Controllers\Profesor\GroupController;
 use App\Http\Controllers\Profesor\IncidentController;
+use App\Http\Controllers\Profesor\JustificationController;
+use App\Http\Controllers\Profesor\ProfileController;
 use App\Http\Controllers\Profesor\ScheduleController;
 use App\Http\Controllers\Profesor\SessionController;
 use App\Http\Controllers\Profesor\StudentController;
@@ -12,12 +14,16 @@ Route::prefix('profesor')
     ->name('profesor.')
     ->middleware(['governance.auth', 'role:profesor,tutor_academico'])
     ->group(function () {
+        Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+        Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
         Route::get('/groups', [GroupController::class, 'index'])->name('groups.index');
         Route::get('/groups/{group}/students', [GroupController::class, 'students'])->name('groups.students');
 
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
         Route::get('/students/{student}/attendance', [StudentController::class, 'attendance'])->name('students.attendance');
         Route::get('/students/{student}/justifications', [StudentController::class, 'justifications'])->name('students.justifications');
+        Route::get('/justifications/{justification}', [JustificationController::class, 'show'])->name('justifications.show');
 
         Route::get('/schedule/today', [ScheduleController::class, 'today'])->name('schedule.today');
         Route::get('/schedule', [ScheduleController::class, 'week'])->name('schedule.week');

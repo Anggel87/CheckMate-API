@@ -28,7 +28,7 @@ class StudentController extends Controller
     /** @var list<string> */
     private const AUDIT_FIELDS = [
         'first_name', 'second_name', 'first_surname', 'second_surname',
-        'email', 'phone', 'birth_date', 'gender', 'group_id', 'active', 'photo',
+        'email', 'phone', 'address', 'birth_date', 'gender', 'group_id', 'active', 'photo',
     ];
 
     public function index(Request $request): JsonResponse
@@ -43,6 +43,7 @@ class StudentController extends Controller
             ->when($request->query('group_id'), fn ($query, $groupId) => $query->where('group_id', $groupId))
             ->when($request->query('career_id'), fn ($query, $careerId) => $query->whereHas('group', fn ($query) => $query->where('career_id', $careerId)))
             ->when($request->has('active'), fn ($query) => $query->where('active', $request->boolean('active')))
+            ->with('tutors')
             ->get();
 
         return $this->successResponse('Alumnos obtenidos correctamente.', AdminStudentResource::collection($students));

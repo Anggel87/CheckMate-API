@@ -22,7 +22,7 @@ class StudentController extends Controller
     {
         $studentModel = $this->findStudent($request->user()->id, $student);
 
-        $studentModel->load('group.career');
+        $studentModel->load(['group.career', 'group.academicTutors.user', 'tutors']);
 
         return $this->successResponse('Alumno obtenido correctamente.', new StudentProfileResource($studentModel));
     }

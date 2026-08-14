@@ -146,6 +146,19 @@ test('updates a student', function () {
     $this->assertDatabaseHas('audit_logs', ['entity' => 'student', 'entity_id' => $student->id, 'action' => 'UPDATE']);
 });
 
+test('updates a student address', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->putJson("/api/v1/administrador/students/{$student->id}", [
+        'address' => 'Av. Siempre Viva 742',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.address', 'Av. Siempre Viva 742');
+    $this->assertDatabaseHas('users', ['id' => $student->id, 'address' => 'Av. Siempre Viva 742']);
+});
+
 test('deactivates a student when confirmed', function () {
     $group = makeActiveGroup();
     $student = User::factory()->student()->create(['group_id' => $group->id]);

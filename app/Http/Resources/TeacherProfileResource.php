@@ -2,12 +2,14 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Tutor;
+use App\Models\Group;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
 
-class AdminStudentResource extends JsonResource
+/** @mixin User */
+class TeacherProfileResource extends JsonResource
 {
     /**
      * @return array<string, mixed>
@@ -16,7 +18,6 @@ class AdminStudentResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'full_name' => $this->fullName(),
             'first_name' => $this->first_name,
             'second_name' => $this->second_name,
             'first_surname' => $this->first_surname,
@@ -26,18 +27,16 @@ class AdminStudentResource extends JsonResource
             'address' => $this->address,
             'birth_date' => $this->birth_date?->format('Y-m-d'),
             'gender' => $this->gender,
-            'active' => $this->active,
             'photo_url' => $this->photo ? Storage::disk('public')->url($this->photo) : null,
-            'group_id' => $this->group_id,
-            'tutors' => $this->whenLoaded('tutors', fn () => $this->tutors->map(fn (Tutor $tutor) => [
-                'id' => $tutor->id,
-                'full_name' => $tutor->fullName(),
-                'phone' => $tutor->phone,
-                'relationship' => $tutor->pivot->relationship,
-                'is_primary' => (bool) $tutor->pivot->is_primary,
-                'receives_notifications' => (bool) $tutor->pivot->receives_notifications,
-            ])),
-            'temporary_password' => $this->when(isset($this->temporary_password), $this->temporary_password),
+            'role' => $this->whenLoaded('role', fn () => $this->role->name),
+            'tutored_groups' => $this->when(
+                $this->relationLoaded('academicTutor') && $this->academicTutor?->relationLoaded('activeGroups'),
+                fn () => $this->academicTutor->activeGroups->map(fn (Group $group) => [
+                    'id' => $group->id,
+                    'grade' => $group->grade,
+                    'section' => $group->section,
+                ])->values()
+            ),
         ];
     }
 }

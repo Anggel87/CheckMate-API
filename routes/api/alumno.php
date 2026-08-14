@@ -11,6 +11,7 @@ Route::prefix('alumno')
     ->middleware(['governance.auth', 'role:alumno'])
     ->group(function () {
         Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+        Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
         Route::get('/claims', [ClaimController::class, 'index'])->name('claims.index');
         Route::get('/claims/{claim}', [ClaimController::class, 'show'])->name('claims.show');

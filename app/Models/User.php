@@ -52,6 +52,7 @@ class User extends Authenticatable
         'active',
         'photo',
         'phone',
+        'address',
         'birth_date',
         'gender',
     ];

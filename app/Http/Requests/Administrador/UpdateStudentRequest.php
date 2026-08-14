@@ -23,6 +23,7 @@ class UpdateStudentRequest extends FormRequest
             'second_surname' => ['sometimes', 'string', 'max:45'],
             'email' => ['sometimes', 'email', 'max:155'],
             'phone' => ['sometimes', 'string', 'regex:/^\d{10}$/'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:255'],
             'birth_date' => ['sometimes', 'date'],
             'gender' => ['sometimes', 'string', 'in:M,F,OTRO'],
             'group_id' => ['sometimes', 'integer'],

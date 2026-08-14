@@ -39,6 +39,8 @@ class IncidentDetailResource extends JsonResource
                 'id' => $student->id,
                 'full_name' => $student->fullName(),
                 'present' => $student->pivot->status === 'PRESENTE',
+                'status' => $student->pivot->status,
+                'notes' => $student->pivot->notes,
             ]),
             'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'history' => $this->when(isset($this->history), fn () => $this->history),

@@ -56,6 +56,34 @@ test('caches the governance /auth/me lookup between requests with the same token
     Http::assertSentCount(1);
 });
 
+test('updates own phone and keeps other fields untouched', function () {
+    $student = User::factory()->student()->create(['governance_user_id' => 42, 'phone' => '5511112222']);
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson('/api/v1/alumno/profile', [
+        'phone' => '5599998888',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.phone', '5599998888');
+
+    $this->assertDatabaseHas('users', [
+        'id' => $student->id,
+        'phone' => '5599998888',
+        'first_name' => $student->first_name,
+    ]);
+});
+
+test('rejects updating own profile with an invalid phone', function () {
+    $student = User::factory()->student()->create(['governance_user_id' => 42]);
+    $token = fakeGovernanceAuth($student);
+
+    $this->putJson('/api/v1/alumno/profile', [
+        'phone' => 'not-a-phone',
+    ], ['Authorization' => "Bearer {$token}"])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['phone']);
+});
+
 test('rejects a user whose role is not alumno', function () {
     $teacher = User::factory()->teacher()->create(['governance_user_id' => 7]);
     $token = fakeGovernanceAuth($teacher);

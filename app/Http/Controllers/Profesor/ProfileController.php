@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Alumno;
+namespace App\Http\Controllers\Profesor;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Requests\Profile\UpdateOwnProfileRequest;
-use App\Http\Resources\StudentProfileResource;
+use App\Http\Resources\TeacherProfileResource;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,9 +16,9 @@ class ProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['group.career', 'tutors']);
+        $user = $request->user()->load(['role', 'academicTutor.activeGroups']);
 
-        return $this->successResponse('Perfil obtenido correctamente.', new StudentProfileResource($user));
+        return $this->successResponse('Perfil obtenido correctamente.', new TeacherProfileResource($user));
     }
 
     public function update(UpdateOwnProfileRequest $request): JsonResponse
@@ -36,7 +36,7 @@ class ProfileController extends Controller
 
         return $this->successResponse(
             'Perfil actualizado correctamente.',
-            new StudentProfileResource($user->load(['group.career', 'tutors'])),
+            new TeacherProfileResource($user->load(['role', 'academicTutor.activeGroups'])),
         );
     }
 }
