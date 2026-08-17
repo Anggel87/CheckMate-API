@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Attendance;
+use App\Models\Justification;
 use App\Models\User;
 
 test('lists groups where the teacher has an active schedule', function () {
@@ -30,6 +32,47 @@ test('lists active students of a group the teacher teaches', function () {
     $response->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.id', $student->id);
+});
+
+test('computes attendance summary for each student without per-student requests', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    Attendance::factory()->count(3)->present()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    Attendance::factory()->late()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    $absentAttendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    Justification::factory()->create(['attendance_id' => $absentAttendance->id]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->getJson("/api/v1/profesor/groups/{$group->id}/students", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.0.attendance_rate', 60)
+        ->assertJsonPath('data.0.absence_count', 1)
+        ->assertJsonPath('data.0.late_count', 1)
+        ->assertJsonPath('data.0.justification_count', 1)
+        ->assertJsonPath('data.0.today_present_count', 4)
+        ->assertJsonPath('data.0.today_absent_count', 1)
+        ->assertJsonPath('data.0.weekly_absence_count', 1);
+});
+
+test('excludes attendance recorded under another teacher from the summary', function () {
+    ['teacher' => $teacher, 'group' => $group] = makeTeacherWithSchedule();
+    ['schedule' => $otherSchedule] = makeTeacherWithSchedule($group, null, 2);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $otherSchedule->id]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->getJson("/api/v1/profesor/groups/{$group->id}/students", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.0.attendance_rate', 0)
+        ->assertJsonPath('data.0.absence_count', 0);
 });
 
 test('rejects listing students of a group the teacher does not teach', function () {

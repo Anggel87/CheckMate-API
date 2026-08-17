@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Profesor;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Profesor\StoreStudentNotificationRequest;
+use App\Http\Requests\Profesor\StoreTutorRequest;
 use App\Http\Resources\JustificationResource;
 use App\Http\Resources\StudentAttendanceResource;
 use App\Http\Resources\StudentProfileResource;
 use App\Models\Justification;
 use App\Models\Schedule;
+use App\Models\Tutor;
 use App\Models\User;
+use App\Services\NotificationService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class StudentController extends Controller
 {
@@ -66,6 +71,56 @@ class StudentController extends Controller
             ->get();
 
         return $this->successResponse('Justificantes obtenidos correctamente.', JustificationResource::collection($justifications));
+    }
+
+    public function addTutor(StoreTutorRequest $request, int $student): JsonResponse
+    {
+        $studentModel = $this->findStudent($request->user()->id, $student);
+        $data = $request->validated();
+
+        $tutor = Tutor::create([
+            'first_name' => $data['first_name'],
+            'second_name' => $data['second_name'] ?? null,
+            'first_surname' => $data['first_surname'],
+            'second_surname' => $data['second_surname'],
+            'phone' => $data['phone'],
+            'is_active' => true,
+        ]);
+
+        if ($data['is_primary'] ?? false) {
+            DB::table('student_tutor')->where('student_id', $studentModel->id)->update(['is_primary' => false]);
+        }
+
+        $studentModel->tutors()->attach($tutor->id, [
+            'relationship' => $data['relationship'],
+            'is_primary' => $data['is_primary'] ?? false,
+            'receives_notifications' => $data['receives_notifications'] ?? true,
+        ]);
+
+        $studentModel->load(['group.career', 'group.academicTutors.user', 'tutors']);
+
+        return $this->successResponse('Tutor agregado correctamente.', new StudentProfileResource($studentModel), 201);
+    }
+
+    public function notify(StoreStudentNotificationRequest $request, NotificationService $service, int $student): JsonResponse
+    {
+        $studentModel = $this->findStudent($request->user()->id, $student);
+        $data = $request->validated();
+
+        $created = $service->broadcast($studentModel, 'AVISO', $data['title'], $data['message'], $request->user()->id);
+
+        if ($created === []) {
+            throw ApiException::unprocessable('El alumno no tiene tutores disponibles para notificar.', 'NOT02');
+        }
+
+        $first = $created[0];
+
+        return $this->successResponse('Aviso enviado correctamente.', [
+            'id' => $first->id,
+            'title' => $data['title'],
+            'recipients_count' => count($created),
+            'sent_at' => $first->sent_at?->toIso8601String(),
+        ], 201);
     }
 
     private function findStudent(int $teacherId, int $studentId): User

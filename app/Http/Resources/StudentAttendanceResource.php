@@ -15,6 +15,7 @@ class StudentAttendanceResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'id' => $this->id,
             'date' => $this->registered_at->format('Y-m-d'),
             'subject' => [
                 'id' => $this->schedule->subject->id,
