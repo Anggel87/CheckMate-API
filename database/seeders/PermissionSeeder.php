@@ -28,7 +28,7 @@ class PermissionSeeder extends Seeder
             'justifications.view', 'statistics.view', 'notifications.view', 'settings.view',
         ],
         'tutor_academico' => [
-            'dashboard.view', 'profile.view', 'groups.view', 'students.view',
+            'dashboard.view', 'profile.view', 'schedule.view', 'groups.view', 'students.view',
             'attendance.view', 'alerts.view', 'claims.view', 'justifications.view',
             'statistics.view', 'notifications.view', 'emergencies.view', 'settings.view',
         ],

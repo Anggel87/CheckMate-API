@@ -23,11 +23,12 @@ Route::prefix('profesor')
         Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
         Route::get('/students/{student}/attendance', [StudentController::class, 'attendance'])->name('students.attendance');
         Route::get('/students/{student}/justifications', [StudentController::class, 'justifications'])->name('students.justifications');
-        Route::post('/students/{student}/tutors', [StudentController::class, 'addTutor'])->name('students.tutors.store');
         Route::post('/students/{student}/notify', [StudentController::class, 'notify'])->name('students.notify');
         Route::get('/justifications/{justification}', [JustificationController::class, 'show'])->name('justifications.show');
 
         Route::get('/schedule/today', [ScheduleController::class, 'today'])->name('schedule.today');
+        Route::get('/schedule/{schedule}/session', [ScheduleController::class, 'sessionState'])->name('schedule.session');
+        Route::get('/schedule/{schedule}/stream', [ScheduleController::class, 'stream'])->name('schedule.stream');
         Route::get('/schedule', [ScheduleController::class, 'week'])->name('schedule.week');
 
         Route::post('/sessions/open', [SessionController::class, 'open'])->name('sessions.open');

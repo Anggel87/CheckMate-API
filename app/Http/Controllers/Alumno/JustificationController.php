@@ -26,7 +26,7 @@ class JustificationController extends Controller
                 fn ($scheduleQuery) => $scheduleQuery->where('subject_id', $subjectId)
             ))
             ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
-            ->with(['attendance.schedule.subject', 'reviewedBy'])
+            ->with(['attendance.schedule.subject', 'attendance.schedule.teacher', 'reviewedBy'])
             ->latest()
             ->get();
 
@@ -35,7 +35,7 @@ class JustificationController extends Controller
 
     public function show(Request $request, Justification $justification): JsonResponse
     {
-        $justification->load('attendance.schedule.subject', 'reviewedBy');
+        $justification->load('attendance.schedule.subject', 'attendance.schedule.teacher', 'reviewedBy');
 
         if ($justification->attendance->student_id !== $request->user()->id) {
             throw ApiException::forbidden('No tienes acceso a este recurso.', 'PERM01');

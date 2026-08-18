@@ -16,7 +16,7 @@ class JustificationController extends Controller
 
     public function show(Request $request, Justification $justification): JsonResponse
     {
-        $justification->load('attendance.schedule.subject', 'reviewedBy');
+        $justification->load('attendance.schedule.subject', 'attendance.schedule.teacher', 'reviewedBy');
 
         $teaches = $justification->attendance->schedule->teacher_id === $request->user()->id;
 

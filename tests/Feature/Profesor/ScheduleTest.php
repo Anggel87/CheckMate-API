@@ -9,7 +9,7 @@ test('lists only today schedules with session_open flag', function () {
     $today = Carbon::now(config('app.timezone'));
     $schedule->update(['day_of_week' => DayOfWeek::fromCarbon($today)]);
 
-    makeOpenClassSession($schedule, $today);
+    $session = makeOpenClassSession($schedule, $today);
 
     $token = fakeGovernanceAuth($teacher);
 
@@ -18,7 +18,8 @@ test('lists only today schedules with session_open flag', function () {
     $response->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.schedule_id', $schedule->id)
-        ->assertJsonPath('data.0.session_open', true);
+        ->assertJsonPath('data.0.session_open', true)
+        ->assertJsonPath('data.0.session_id', $session->id);
 });
 
 test('groups the weekly schedule by day', function () {

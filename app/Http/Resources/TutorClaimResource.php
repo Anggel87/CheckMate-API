@@ -50,9 +50,12 @@ class TutorClaimResource extends JsonResource
             'evidence_url' => $this->evidence ? Storage::disk('public')->url($this->evidence) : null,
             'status' => $this->status,
             // No existe una tabla de auditoría de acciones sobre el reclamo todavía,
-            // solo la última acción (action_by_user_id/action_at/comment). Se deja el
-            // arreglo vacío en vez de inventar historial que no se persiste.
-            'history' => [],
+            // solo se persiste la ultima accion tomada.
+            'last_action' => $this->action_at ? [
+                'by' => $this->actionBy?->fullName(),
+                'at' => $this->action_at->toIso8601String(),
+                'comment' => $this->comment,
+            ] : null,
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }

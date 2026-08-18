@@ -54,7 +54,7 @@ class StudentController extends Controller
 
         $justifications = Justification::query()
             ->whereHas('attendance', fn ($query) => $query->where('student_id', $studentModel->id))
-            ->with('attendance.schedule.subject')
+            ->with(['attendance.schedule.subject', 'attendance.schedule.teacher', 'reviewedBy'])
             ->latest()
             ->get();
 

@@ -981,8 +981,6 @@ Esta misma lógica de cierre la ejecuta automáticamente el comando `class-sessi
 
 `GET /justifications/{justification}` — detalle de un justificante puntual (motivo, evidencia, estado, revisor). 403 `PERM01` si el justificante no pertenece a un horario de este profesor.
 
-`POST /students/{student}/tutors` — agrega un tutor legal al alumno. Mismo body/lógica que Administrador (8.6 `addTutor`). 403 `PERM01` si el profesor no tiene horario activo en el grupo del alumno. Responde `StudentProfileResource` con `tutors[]` actualizado.
-
 `POST /students/{student}/notify` — envía un aviso manual (`type: AVISO`) a todos los tutores del alumno que tengan notificaciones activas, vía `NotificationService::broadcast()` (registra en `notifications` y envía WhatsApp best-effort). Body: `title* (string, min:3, max:90)`, `message* (string, max:350)`. 422 `NOT02` si el alumno no tiene tutores disponibles para notificar.
 
 ### 10.7 Evento `AttendanceRegistered`

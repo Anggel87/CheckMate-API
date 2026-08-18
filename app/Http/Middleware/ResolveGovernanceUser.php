@@ -12,6 +12,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class ResolveGovernanceUser
@@ -70,7 +71,12 @@ class ResolveGovernanceUser
         $resolve = fn () => Cache::remember($key, $ttl, function () use ($token) {
             try {
                 $response = $this->governance->me($token);
-            } catch (RequestException|ConnectionException) {
+            } catch (RequestException|ConnectionException $exception) {
+                Log::warning('No se pudo validar la sesion contra gobernanza.', [
+                    'base_url' => config('services.governance.base_url'),
+                    'exception' => $exception->getMessage(),
+                ]);
+
                 return null;
             }
 

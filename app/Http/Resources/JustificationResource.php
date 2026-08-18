@@ -24,6 +24,7 @@ class JustificationResource extends JsonResource
                 'name' => $subject->name,
             ],
             'date' => $this->attendance->registered_at->format('Y-m-d'),
+            'teacher' => $this->attendance->schedule->teacher?->fullName(),
             'reason' => $this->reason,
             'evidence_url' => $this->file ? Storage::disk('public')->url($this->file) : null,
             'status' => $this->status,

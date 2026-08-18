@@ -56,40 +56,35 @@ test('lists attendance only for subjects the teacher teaches the student', funct
         ->assertJsonPath('data.0.status', 'PRESENTE');
 });
 
-test('adds a legal tutor to a student the teacher teaches', function () {
-    ['teacher' => $teacher, 'group' => $group] = makeTeacherWithSchedule();
+test('academic tutor sees attendance for every subject even without teaching there', function () {
+    ['group' => $group, 'schedule' => $mySchedule] = makeTeacherWithSchedule();
+    $otherSchedule = makeActiveSchedule($group);
+    $tutor = makeTutorForGroup($group, 2);
     $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
 
-    $token = fakeGovernanceAuth($teacher);
+    Attendance::factory()->present()->create(['student_id' => $student->id, 'schedule_id' => $mySchedule->id]);
+    Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $otherSchedule->id]);
 
-    $response = $this->postJson("/api/v1/profesor/students/{$student->id}/tutors", [
-        'first_name' => 'Carlos',
-        'first_surname' => 'Pérez',
-        'second_surname' => 'Gómez',
-        'phone' => '8711112222',
-        'relationship' => 'Padre',
-    ], ['Authorization' => "Bearer {$token}"]);
+    $token = fakeGovernanceAuth($tutor);
 
-    $response->assertCreated()->assertJsonCount(1, 'data.tutors');
-    $this->assertDatabaseHas('student_tutor', ['student_id' => $student->id, 'relationship' => 'Padre']);
+    $response = $this->getJson("/api/v1/profesor/students/{$student->id}/attendance", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(2, 'data');
 });
 
-test('rejects adding a tutor for a student outside the teacher groups', function () {
-    ['teacher' => $teacher] = makeTeacherWithSchedule();
-    $otherGroup = makeActiveGroup();
-    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $otherGroup->id]);
+test('academic tutor sees justifications for every subject even without teaching there', function () {
+    ['group' => $group, 'schedule' => $mySchedule] = makeTeacherWithSchedule();
+    $tutor = makeTutorForGroup($group, 2);
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
 
-    $token = fakeGovernanceAuth($teacher);
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $mySchedule->id]);
+    Justification::factory()->create(['attendance_id' => $attendance->id, 'justified_by_user_id' => $student->id]);
 
-    $response = $this->postJson("/api/v1/profesor/students/{$student->id}/tutors", [
-        'first_name' => 'Carlos',
-        'first_surname' => 'Pérez',
-        'second_surname' => 'Gómez',
-        'phone' => '8711112222',
-        'relationship' => 'Padre',
-    ], ['Authorization' => "Bearer {$token}"]);
+    $token = fakeGovernanceAuth($tutor);
 
-    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+    $response = $this->getJson("/api/v1/profesor/students/{$student->id}/justifications", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(1, 'data');
 });
 
 test('sends a manual notification to a student tutors', function () {

@@ -75,6 +75,39 @@ test('excludes attendance recorded under another teacher from the summary', func
         ->assertJsonPath('data.0.absence_count', 0);
 });
 
+test('academic tutor lists groups assigned via the academic tutor pivot even without teaching there', function () {
+    $group = makeActiveGroup();
+    $tutor = makeTutorForGroup($group, 2);
+
+    User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->getJson('/api/v1/profesor/groups', ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $group->id);
+});
+
+test('academic tutor lists and sees the attendance summary for a group they do not personally teach', function () {
+    ['group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $tutor = makeTutorForGroup($group, 2);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    $absentAttendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    Justification::factory()->create(['attendance_id' => $absentAttendance->id]);
+
+    $token = fakeGovernanceAuth($tutor);
+
+    $response = $this->getJson("/api/v1/profesor/groups/{$group->id}/students", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.absence_count', 1)
+        ->assertJsonPath('data.0.justification_count', 1);
+});
+
 test('rejects listing students of a group the teacher does not teach', function () {
     ['teacher' => $teacher] = makeTeacherWithSchedule();
     $otherGroup = makeActiveGroup();
