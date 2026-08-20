@@ -63,7 +63,7 @@ class SubjectController extends Controller
 
         $attendances = $user->attendances()
             ->whereIn('schedule_id', $scheduleIds)
-            ->with(['schedule', 'justification'])
+            ->with(['schedule', 'justification', 'claims'])
             ->latest('registered_at')
             ->get();
 
@@ -116,7 +116,7 @@ class SubjectController extends Controller
 
         $attendances = $user->attendances()
             ->whereHas('schedule', fn ($query) => $query->where('subject_id', $subject->id))
-            ->with(['schedule', 'justification'])
+            ->with(['schedule', 'justification', 'claims'])
             ->latest('registered_at')
             ->get();
 

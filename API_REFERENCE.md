@@ -297,6 +297,7 @@ Tabla consolidada de **todos** los códigos de error del sistema (útil para map
 |---|---|---|
 | `CLM01` | 404 | Reclamo no existe o fuera de alcance |
 | `CLM02` | 409 | Reclamo ya resuelto (`ACEPTADO`/`RECHAZADO`) — estado terminal |
+| `CLM03` | 409 | Reclamo ya no está en `PENDIENTE` (usado por Alumno al editar/cancelar su propio reclamo — más amplio que `CLM02`, también bloquea `EN_PROCESO`/`CONTACTADO`) |
 | `JUST01` | 404 | Justificante no existe o no pertenece al alumno indicado |
 | `JUST02` | 409 | Justificante ya revisado (no está `PENDIENTE`) |
 | `JUST03` | 409 | Ya existe un justificante para esa asistencia |
@@ -1050,6 +1051,10 @@ Flujo: 403 `PERM02` si no está inscrito activamente en esa materia. Toma `$user
 
 Respuesta 201: `ClaimResource`.
 
+`PUT /claims/{claim}` — el alumno edita su propio reclamo (`description`, opcionalmente reemplaza `evidence`) **mientras siga en `PENDIENTE`**. Body (multipart, method-spoofed como `POST` + `_method=PUT` — PHP no parsea multipart en PUT real): `description* (string, min:10, max:500)`, `evidence (nullable, file)`. 403 `PERM01` si no es del alumno. **409 `CLM03`** si `status !== 'PENDIENTE'` (mismo gate que `DELETE`, más amplio que `CLM02`). Si sube `evidence` nueva, borra el archivo anterior de `storage/public/claims`. Respuesta: `ClaimResource`.
+
+`DELETE /claims/{claim}` — cancela (borra) el reclamo propio. Requiere `?confirm=true` (`VAL03` si falta). 403 `PERM01` si no es del alumno. **409 `CLM03`** si `status !== 'PENDIENTE'`.
+
 ### 12.3 Justifications (perspectiva Alumno)
 
 `GET /justifications` — sin paginar. Query: `subject_id`, `status`.
@@ -1069,13 +1074,17 @@ Flujo: 404 `ATT03` si `{attendance}` no existe o no es de esa materia. 403 `PERM
 
 Respuesta 201: `JustificationResource`.
 
+`PUT /justifications/{justification}` — el alumno edita su propio justificante (`reason`, opcionalmente reemplaza `evidence`) **mientras siga en `PENDIENTE`** (a diferencia de `POST .../justify`, aquí `evidence` es opcional — solo se reemplaza si se manda). Body (multipart, mismo method-spoofing que `claims`): `reason* (string, min:5, max:300)`, `evidence (nullable, file)`. 403 `PERM01` si no es del alumno. **409 `JUST02`** si `status !== 'PENDIENTE'` (ya fue revisado). Reemplaza el archivo anterior en `storage/public/justifications` si se sube uno nuevo. Respuesta: `JustificationResource`.
+
+`DELETE /justifications/{justification}` — borra el justificante propio. Requiere `?confirm=true` (`VAL03` si falta). 403 `PERM01` si no es del alumno. **409 `JUST02`** si `status !== 'PENDIENTE'`. Al eliminarlo, `attendance.status` sigue en `FALTA` (nunca llegó a `JUSTIFICADA` porque solo cambia al aprobar) y `AttendanceRecordResource.justifiable` vuelve a `true` automáticamente.
+
 ### 12.4 Subjects (perspectiva Alumno)
 
 `GET /subjects` — materias según los horarios activos del grupo del alumno (ciclo escolar `ACTIVO`). `SubjectResource[]`: `{id, name, teacher{id,full_name}, schedule: "Lunes 08:00-09:00, Miércoles 08:00-09:00"}`.
 
 `GET /subjects/{subject}` — binding implícito. Si no hay horario activo del grupo para esa materia → **403 `PERM01`** (⚠️ no 404, aunque la materia simplemente no aplique). `SubjectDetailResource` con `attendance_summary{on_time, late, absent}` (⚠️ `JUSTIFICADA` no se cuenta en ninguno de los 3 buckets).
 
-`GET /subjects/{subject}/attendance` — mismo chequeo 403 `PERM01`. `AttendanceRecordResource[]`: `{attendance_id, date, status, justifiable}` (`justifiable: true` solo si `status === FALTA` y aún no tiene justificante).
+`GET /subjects/{subject}/attendance` — mismo chequeo 403 `PERM01`. `AttendanceRecordResource[]`: `{attendance_id, subject_id, date, status, justifiable, justification_id, justification_status, claim_id, claim_status, checked_in_at, schedule{day_of_week, start_time, end_time}}` (`justifiable: true` solo si `status === FALTA` y aún no tiene justificante; `justification_status`/`claim_status` son `null` o el `status` del `Justification`/`Claim` ligado a esa asistencia puntual — si hay varios `claims` para la misma asistencia, se usa el más reciente por `created_at`; `schedule.start_time`/`end_time` son los de ESE registro puntual, no el horario semanal completo de la materia).
 
 ---
 

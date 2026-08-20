@@ -7,6 +7,7 @@ use App\Services\Governance\GovernanceClient;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Log;
 
 class LinkSeededUsersToGovernance extends Command
 {
@@ -52,6 +53,16 @@ class LinkSeededUsersToGovernance extends Command
             return self::SUCCESS;
         }
 
+        $baseUrl = config('services.governance.base_url');
+        $clientId = config('services.governance.client_id');
+
+        $this->components->info("Vinculando {$users->count()} usuario(s) contra {$baseUrl} (client_id: {$clientId}).");
+        Log::info('governance:link-users iniciado', [
+            'base_url' => $baseUrl,
+            'client_id' => $clientId,
+            'users_count' => $users->count(),
+        ]);
+
         $rows = [];
 
         foreach ($users as $user) {
@@ -64,10 +75,26 @@ class LinkSeededUsersToGovernance extends Command
                 ]);
             } catch (ConnectionException $e) {
                 $this->components->error('No se pudo conectar con gobernanza. ¿Está corriendo? '.$e->getMessage());
+                Log::error('governance:link-users no pudo conectar con gobernanza.', [
+                    'base_url' => $baseUrl,
+                    'exception' => $e->getMessage(),
+                ]);
 
                 return self::FAILURE;
             } catch (RequestException $e) {
-                $this->components->warn("Se omitió {$user->email}: gobernanza respondió {$e->response->status()}.");
+                $status = $e->response->status();
+                $body = $e->response->json() ?? $e->response->body();
+
+                $this->components->warn("Se omitió {$user->email}: gobernanza respondió {$status}.");
+                $this->line('  '.json_encode($body));
+
+                Log::warning('governance:link-users omitió un usuario.', [
+                    'base_url' => $baseUrl,
+                    'client_id' => $clientId,
+                    'email' => $user->email,
+                    'status' => $status,
+                    'response_body' => $body,
+                ]);
 
                 continue;
             }

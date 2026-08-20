@@ -18,7 +18,7 @@ class PermissionSeeder extends Seeder
      */
     private const ROLE_PERMISSIONS = [
         'alumno' => [
-            'dashboard.view', 'profile.view', 'schedule.view', 'subjects.view',
+            'dashboard.view', 'profile.view', 'schedule.view', 'subjects.view', 'teachers.view',
             'attendance.view', 'justifications.view', 'claims.view',
             'notifications.view', 'emergencies.view', 'settings.view',
         ],

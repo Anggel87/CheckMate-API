@@ -123,3 +123,104 @@ test('rejects creating a general claim when the student has no group', function 
 
     $response->assertStatus(409)->assertJsonPath('error_code', 'GRP05');
 });
+
+test('updates a pending claim', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $student->id, 'status' => 'PENDIENTE', 'description' => 'Descripcion original del reclamo.']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson("/api/v1/alumno/claims/{$claim->id}", [
+        'description' => 'Descripcion corregida del reclamo con mas detalle.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.description', 'Descripcion corregida del reclamo con mas detalle.');
+
+    $this->assertDatabaseHas('claims', [
+        'id' => $claim->id,
+        'description' => 'Descripcion corregida del reclamo con mas detalle.',
+    ]);
+});
+
+test('rejects updating another student claim', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $otherStudent = User::factory()->student()->create(['governance_user_id' => 2, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $otherStudent->id, 'status' => 'PENDIENTE']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson("/api/v1/alumno/claims/{$claim->id}", [
+        'description' => 'Intento de editar un reclamo ajeno.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+});
+
+test('rejects updating a claim that is already being attended', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $student->id, 'status' => 'EN_PROCESO']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson("/api/v1/alumno/claims/{$claim->id}", [
+        'description' => 'Ya no deberia poder editar esto.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'CLM03');
+});
+
+test('cancels a pending claim when confirmed', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $student->id, 'status' => 'PENDIENTE']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/claims/{$claim->id}?confirm=true", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk();
+    $this->assertDatabaseMissing('claims', ['id' => $claim->id]);
+});
+
+test('requires confirmation to cancel a claim', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $student->id, 'status' => 'PENDIENTE']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/claims/{$claim->id}", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertStatus(422)->assertJsonPath('error_code', 'VAL03');
+    $this->assertDatabaseHas('claims', ['id' => $claim->id]);
+});
+
+test('rejects cancelling another student claim', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $otherStudent = User::factory()->student()->create(['governance_user_id' => 2, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $otherStudent->id, 'status' => 'PENDIENTE']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/claims/{$claim->id}?confirm=true", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+    $this->assertDatabaseHas('claims', ['id' => $claim->id]);
+});
+
+test('rejects cancelling a claim that is already being attended', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $claim = Claim::factory()->create(['tutor_id' => $student->id, 'status' => 'EN_PROCESO']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/claims/{$claim->id}?confirm=true", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'CLM03');
+    $this->assertDatabaseHas('claims', ['id' => $claim->id]);
+});

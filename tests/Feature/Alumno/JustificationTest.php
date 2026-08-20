@@ -167,6 +167,129 @@ test('shows the real reviewer and comment once a tutor reviews the justification
         ->assertJsonPath('data.comment', 'Justificante válido.');
 });
 
+test('updates a pending justification', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $student->id]),
+        'reason' => 'Motivo original.',
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson("/api/v1/alumno/justifications/{$justification->id}", [
+        'reason' => 'Motivo corregido con mas contexto.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.reason', 'Motivo corregido con mas contexto.');
+
+    $this->assertDatabaseHas('justifications', [
+        'id' => $justification->id,
+        'reason' => 'Motivo corregido con mas contexto.',
+    ]);
+});
+
+test('rejects updating another student justification', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $otherStudent = User::factory()->student()->create(['governance_user_id' => 2, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $otherStudent->id]),
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson("/api/v1/alumno/justifications/{$justification->id}", [
+        'reason' => 'Intento de editar un justificante ajeno.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+});
+
+test('rejects updating a justification that was already reviewed', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->accepted()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $student->id]),
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->putJson("/api/v1/alumno/justifications/{$justification->id}", [
+        'reason' => 'Ya no deberia poder editar esto.',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'JUST02');
+});
+
+test('deletes a pending justification when confirmed', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $student->id]),
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/justifications/{$justification->id}?confirm=true", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk();
+    $this->assertDatabaseMissing('justifications', ['id' => $justification->id]);
+});
+
+test('requires confirmation to delete a justification', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $student->id]),
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/justifications/{$justification->id}", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertStatus(422)->assertJsonPath('error_code', 'VAL03');
+    $this->assertDatabaseHas('justifications', ['id' => $justification->id]);
+});
+
+test('rejects deleting another student justification', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+    $otherStudent = User::factory()->student()->create(['governance_user_id' => 2, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $otherStudent->id]),
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/justifications/{$justification->id}?confirm=true", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+    $this->assertDatabaseHas('justifications', ['id' => $justification->id]);
+});
+
+test('rejects deleting a justification that was already reviewed', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+
+    $justification = Justification::factory()->rejected()->create([
+        'attendance_id' => Attendance::factory()->absent()->create(['student_id' => $student->id]),
+    ]);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->deleteJson("/api/v1/alumno/justifications/{$justification->id}?confirm=true", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'JUST02');
+    $this->assertDatabaseHas('justifications', ['id' => $justification->id]);
+});
+
 test('rejects justifying an attendance that does not exist', function () {
     Storage::fake('public');
 

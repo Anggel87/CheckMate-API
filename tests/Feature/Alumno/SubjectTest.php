@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\Claim;
 use App\Models\Justification;
 use App\Models\Subject;
 use App\Models\User;
@@ -94,6 +95,29 @@ test('flags absent attendance without a justification as justifiable', function 
 
     expect($byId[$unjustified->id]['justifiable'])->toBeTrue();
     expect($byId[$justifiedAttendance->id]['justifiable'])->toBeFalse();
+});
+
+test('exposes the linked justification and claim status on an attendance record', function () {
+    $group = makeActiveGroup();
+    $subject = Subject::factory()->create();
+    $schedule = makeActiveSchedule($group, $subject);
+
+    $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
+
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    $justification = Justification::factory()->create(['attendance_id' => $attendance->id]);
+    $claim = Claim::factory()->create(['attendance_id' => $attendance->id, 'status' => 'EN_PROCESO']);
+
+    $token = fakeGovernanceAuth($student);
+
+    $response = $this->getJson("/api/v1/alumno/subjects/{$subject->id}/attendance", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.0.justification_id', $justification->id)
+        ->assertJsonPath('data.0.justification_status', 'PENDIENTE')
+        ->assertJsonPath('data.0.claim_id', $claim->id)
+        ->assertJsonPath('data.0.claim_status', 'EN_PROCESO')
+        ->assertJsonPath('data.0.justifiable', false);
 });
 
 test('lists attendance across every subject in a single request', function () {
