@@ -85,3 +85,20 @@ test('deactivates a group with no active students when confirmed', function () {
     $this->assertDatabaseHas('groups', ['id' => $group->id, 'is_active' => false]);
     $this->assertDatabaseHas('audit_logs', ['entity' => 'group', 'entity_id' => $group->id, 'action' => 'DELETE']);
 });
+
+test('returns a group schedule, unlike the career-scoped director endpoint', function () {
+    ['schedule' => $schedule, 'group' => $group] = makeTeacherWithSchedule();
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->getJson("/api/v1/administrador/groups/{$group->id}/schedule", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.schedule_id', $schedule->id);
+});
+
+test('returns 404 for a schedule request on a missing group', function () {
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->getJson('/api/v1/administrador/groups/999999/schedule', ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertNotFound()->assertJsonPath('error_code', 'GRP02');
+});

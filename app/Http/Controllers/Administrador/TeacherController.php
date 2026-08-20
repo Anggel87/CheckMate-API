@@ -87,6 +87,10 @@ class TeacherController extends Controller
 
         $data = $request->validated();
 
+        if (isset($data['email']) && User::where('email', $data['email'])->whereKeyNot($model->id)->exists()) {
+            throw ApiException::conflict('Ya existe un usuario registrado con ese correo.', 'USR04');
+        }
+
         $this->assertValidEvidence($request->file('photo'), 3, ['image/jpeg', 'image/png']);
 
         if ($request->hasFile('photo')) {

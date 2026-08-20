@@ -17,7 +17,7 @@ class NfcAttendanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nfc_uid' => ['required', 'string', 'regex:/^[A-Fa-f0-9:\- ]{1,100}$/'],
+            'nfc_uid' => ['required', 'string', 'regex:/^[A-Za-z0-9:\- ]{1,100}$/'],
             'scanned_at' => ['required', 'date_format:Y-m-d\TH:i:s'],
         ];
     }

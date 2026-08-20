@@ -18,7 +18,7 @@ class NfcTapRequest extends FormRequest
     {
         return [
             'mac_address' => ['required', 'string', 'regex:/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/'],
-            'nfc_uid' => ['required', 'string', 'regex:/^[A-Fa-f0-9:\- ]{1,100}$/'],
+            'nfc_uid' => ['required', 'string', 'regex:/^[A-Za-z0-9:\- ]{1,100}$/'],
             'scanned_at' => ['sometimes', 'date_format:Y-m-d\TH:i:s'],
         ];
     }
