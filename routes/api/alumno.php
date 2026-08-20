@@ -25,4 +25,5 @@ Route::prefix('alumno')
         Route::get('/subjects/{subject}', [SubjectController::class, 'show'])->name('subjects.show');
         Route::get('/subjects/{subject}/attendance', [SubjectController::class, 'attendance'])->name('subjects.attendance');
         Route::post('/subjects/{subject}/attendance/{attendance}/justify', [JustificationController::class, 'store'])->name('subjects.attendance.justify');
+        Route::get('/incidents/active', [\App\Http\Controllers\Profesor\IncidentController::class, 'active'])->name('incidents.active');
     });
