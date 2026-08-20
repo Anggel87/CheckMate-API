@@ -11,7 +11,9 @@ use App\Http\Requests\Administrador\UpdateStudentRequest;
 use App\Http\Requests\Administrador\UpdateTutorRequest;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Resources\AdminStudentResource;
+use App\Http\Resources\JustificationResource;
 use App\Models\Group;
+use App\Models\Justification;
 use App\Models\Tutor;
 use App\Models\User;
 use App\Services\Administrador\CreateStudentService;
@@ -89,6 +91,10 @@ class StudentController extends Controller
         $before = $model->only(self::AUDIT_FIELDS);
 
         $data = $request->validated();
+
+        if (isset($data['email']) && User::where('email', $data['email'])->whereKeyNot($model->id)->exists()) {
+            throw ApiException::conflict('Ya existe un usuario registrado con ese correo.', 'USR04');
+        }
 
         $this->assertValidEvidence($request->file('photo'), 3, ['image/jpeg', 'image/png']);
 
@@ -189,6 +195,22 @@ class StudentController extends Controller
         $model->tutors()->detach($tutor);
 
         return $this->successResponse('Tutor eliminado correctamente.', new AdminStudentResource($model->load('tutors')));
+    }
+
+    /**
+     * Same shape as Director\StudentController::justifications — no career scoping.
+     */
+    public function justifications(int $student): JsonResponse
+    {
+        $studentModel = $this->findStudent($student);
+
+        $justifications = Justification::query()
+            ->whereHas('attendance', fn ($query) => $query->where('student_id', $studentModel->id))
+            ->with(['attendance.schedule.subject', 'attendance.schedule.teacher', 'reviewedBy'])
+            ->latest()
+            ->get();
+
+        return $this->successResponse('Justificantes obtenidos correctamente.', JustificationResource::collection($justifications));
     }
 
     private function findStudent(int $id): User

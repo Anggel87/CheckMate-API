@@ -121,4 +121,34 @@ class GroupController extends Controller
 
         return $this->successResponse('Grupo dado de baja correctamente.', new AdminGroupResource($model));
     }
+
+    /**
+     * Same shape as Director\GroupController::schedule — no career scoping since admin can
+     * inspect any group's schedule.
+     */
+    public function schedule(int $group): JsonResponse
+    {
+        $model = Group::find($group);
+
+        if ($model === null) {
+            throw ApiException::notFound('El grupo solicitado no existe.', 'GRP02');
+        }
+
+        $schedules = $model->schedules()
+            ->where('is_active', true)
+            ->with(['subject', 'teacher', 'classroom'])
+            ->get()
+            ->map(fn ($schedule) => [
+                'schedule_id' => $schedule->id,
+                'subject' => ['id' => $schedule->subject->id, 'name' => $schedule->subject->name],
+                'teacher' => ['id' => $schedule->teacher->id, 'full_name' => $schedule->teacher->fullName()],
+                'classroom' => ['name' => $schedule->classroom->name, 'building' => $schedule->classroom->building],
+                'day_of_week' => $schedule->day_of_week,
+                'start_time' => substr((string) $schedule->start_time, 0, 5),
+                'end_time' => substr((string) $schedule->end_time, 0, 5),
+            ])
+            ->values();
+
+        return $this->successResponse('Horario obtenido correctamente.', $schedules);
+    }
 }

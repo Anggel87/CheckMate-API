@@ -1,6 +1,8 @@
 <?php
 
 use App\Mail\TemporaryPasswordMail;
+use App\Models\Attendance;
+use App\Models\Justification;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
@@ -146,6 +148,32 @@ test('updates a student', function () {
     $this->assertDatabaseHas('audit_logs', ['entity' => 'student', 'entity_id' => $student->id, 'action' => 'UPDATE']);
 });
 
+test('rejects updating a student email to one already used by another user', function () {
+    $group = makeActiveGroup();
+    $existing = User::factory()->student()->create(['group_id' => $group->id]);
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->putJson("/api/v1/administrador/students/{$student->id}", [
+        'email' => $existing->email,
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'USR04');
+});
+
+test('allows updating a student keeping its own email', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->putJson("/api/v1/administrador/students/{$student->id}", [
+        'email' => $student->email,
+        'first_name' => 'Nombre actualizado',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.first_name', 'Nombre actualizado');
+});
+
 test('updates a student address', function () {
     $group = makeActiveGroup();
     $student = User::factory()->student()->create(['group_id' => $group->id]);
@@ -179,6 +207,20 @@ test('requires confirmation to deactivate a student', function () {
     $response = $this->deleteJson("/api/v1/administrador/students/{$student->id}", [], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertStatus(422)->assertJsonPath('error_code', 'VAL03');
+});
+
+test('lists a student justifications', function () {
+    $group = makeActiveGroup();
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    $schedule = makeActiveSchedule($group);
+    $attendance = Attendance::factory()->absent()->create(['student_id' => $student->id, 'schedule_id' => $schedule->id]);
+    $justification = Justification::factory()->create(['attendance_id' => $attendance->id]);
+
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->getJson("/api/v1/administrador/students/{$student->id}/justifications", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $justification->id);
 });
 
 test('still creates the student even if the welcome email fails to send', function () {

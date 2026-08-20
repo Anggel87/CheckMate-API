@@ -124,6 +124,30 @@ test('updates a teacher', function () {
     $this->assertDatabaseHas('audit_logs', ['entity' => 'teacher', 'entity_id' => $teacher->id, 'action' => 'UPDATE']);
 });
 
+test('rejects updating a teacher email to one already used by another user', function () {
+    $existing = User::factory()->teacher()->create();
+    $teacher = User::factory()->teacher()->create();
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->putJson("/api/v1/administrador/teachers/{$teacher->id}", [
+        'email' => $existing->email,
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'USR04');
+});
+
+test('allows updating a teacher keeping its own email', function () {
+    $teacher = User::factory()->teacher()->create();
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->putJson("/api/v1/administrador/teachers/{$teacher->id}", [
+        'email' => $teacher->email,
+        'first_name' => 'Nombre actualizado',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.first_name', 'Nombre actualizado');
+});
+
 test('deactivates a teacher when confirmed', function () {
     $teacher = User::factory()->teacher()->create();
     $token = fakeGovernanceAuth(makeAdmin());

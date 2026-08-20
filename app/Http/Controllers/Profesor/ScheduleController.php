@@ -105,6 +105,7 @@ class ScheduleController extends Controller
                         'student_id' => $attendance->student_id,
                         'status' => $attendance->status,
                         'registered_at' => $attendance->registered_at->toIso8601String(),
+                        'method' => $attendance->method,
                     ]);
                 }
 
