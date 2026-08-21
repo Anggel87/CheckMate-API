@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\SubjectFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -31,5 +32,10 @@ class Subject extends Model
     public function schedules(): HasMany
     {
         return $this->hasMany(Schedule::class, 'subject_id');
+    }
+
+    public function careers(): BelongsToMany
+    {
+        return $this->belongsToMany(Career::class, 'career_subject');
     }
 }

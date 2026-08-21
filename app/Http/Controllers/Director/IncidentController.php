@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Director;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\GuardsSingleActiveIncident;
 use App\Http\Controllers\Concerns\LoadsIncidentHistory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
@@ -18,13 +19,14 @@ use App\Models\Schedule;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Director\CareerScope;
+use App\Services\NotificationService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class IncidentController extends Controller
 {
-    use ApiResponse, LoadsIncidentHistory, ValidatesEvidenceFile;
+    use ApiResponse, GuardsSingleActiveIncident, LoadsIncidentHistory, ValidatesEvidenceFile;
 
     public function index(Request $request, CareerScope $scope): JsonResponse
     {
@@ -75,12 +77,13 @@ class IncidentController extends Controller
         return $this->successResponse('Incidente obtenido correctamente.', new IncidentDetailResource($incidentModel));
     }
 
-    public function store(StoreIncidentRequest $request, CareerScope $scope, AuditLogger $auditLogger): JsonResponse
+    public function store(StoreIncidentRequest $request, CareerScope $scope, AuditLogger $auditLogger, NotificationService $notificationService): JsonResponse
     {
         $director = $request->user();
         $careerIds = $scope->assertHasCareer($director);
         $data = $request->validated();
 
+        $this->assertNoActiveIncidentExists();
         $this->assertValidEvidence($request->file('evidence'));
 
         $schedule = Schedule::whereIn('group_id', $scope->groupIds($careerIds))->find($data['schedule_id']);
@@ -122,6 +125,8 @@ class IncidentController extends Controller
             'severity' => $incident->severity,
             'status' => $incident->status,
         ]);
+
+        $this->notifySchoolWideIncident($incident, $director->id, $notificationService);
 
         $this->loadIncidentHistory($incident);
 

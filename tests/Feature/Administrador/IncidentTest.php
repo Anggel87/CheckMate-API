@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AppNotification;
 use App\Models\Incident;
 use App\Models\User;
 
@@ -87,4 +88,77 @@ test('returns 404 for a nonexistent incident', function () {
     $response = $this->getJson('/api/v1/administrador/incidents/999999', ['Authorization' => "Bearer {$token}"]);
 
     $response->assertNotFound()->assertJsonPath('error_code', 'INC01');
+});
+
+test('rejects creating an incident while another one is active', function () {
+    ['schedule' => $schedule] = makeTeacherWithSchedule(makeActiveGroup(), null, 2);
+    Incident::factory()->create(['schedule_id' => $schedule->id, 'status' => 'ACTIVO']);
+    $student = User::factory()->student()->create();
+
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->postJson('/api/v1/administrador/incidents', [
+        'type' => 'GAS',
+        'title' => 'Fuga de gas',
+        'severity' => 'ALTA',
+        'schedule_id' => $schedule->id,
+        'student_ids' => [$student->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'INC04');
+});
+
+test('allows creating a new incident once the active one is closed', function () {
+    ['schedule' => $schedule] = makeTeacherWithSchedule(makeActiveGroup(), null, 2);
+    $closed = Incident::factory()->resolved()->create(['schedule_id' => $schedule->id]);
+    $student = User::factory()->student()->create();
+
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->postJson('/api/v1/administrador/incidents', [
+        'type' => 'GAS',
+        'title' => 'Fuga de gas',
+        'severity' => 'ALTA',
+        'schedule_id' => $schedule->id,
+        'student_ids' => [$student->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated();
+    expect(Incident::where('status', 'ACTIVO')->count())->toBe(1);
+    expect($closed->fresh()->status)->toBe('RESUELTO');
+});
+
+test('notifies the whole school when an incident is reported', function () {
+    $group = makeActiveGroup();
+    ['schedule' => $schedule, 'teacher' => $reportingTeacher] = makeTeacherWithSchedule($group, null, 2);
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    ['teacher' => $otherTeacher] = makeTeacherWithSchedule(makeActiveGroup(), null, 3);
+
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->postJson('/api/v1/administrador/incidents', [
+        'type' => 'EARTHQUAKE',
+        'title' => 'Sismo',
+        'severity' => 'CRITICA',
+        'schedule_id' => $schedule->id,
+        'student_ids' => [$student->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated();
+
+    // Alumno: WhatsApp al tutor (si tiene) + aviso en la app.
+    $this->assertDatabaseHas('notifications', [
+        'user_id' => $student->id,
+        'recipient_type' => 'STUDENT',
+        'type' => 'INCIDENTE',
+        'title' => 'Sismo',
+    ]);
+
+    // Ambos profesores (no solo el que reporto ni solo los de su grupo) reciben el aviso.
+    $this->assertDatabaseHas('notifications', ['user_id' => $reportingTeacher->id, 'recipient_type' => 'TEACHER', 'type' => 'INCIDENTE']);
+    $this->assertDatabaseHas('notifications', ['user_id' => $otherTeacher->id, 'recipient_type' => 'TEACHER', 'type' => 'INCIDENTE']);
+
+    // Todas las filas del aviso comparten un solo batch_id (una sola entrada en el log).
+    $batchIds = AppNotification::where('type', 'INCIDENTE')->pluck('batch_id')->unique();
+    expect($batchIds)->toHaveCount(1);
 });

@@ -2,10 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class AdminNotificationSummaryResource extends JsonResource
+/** @mixin AppNotification */
+class RecipientNotificationResource extends JsonResource
 {
     /**
      * @return array<string, mixed>
@@ -15,11 +17,13 @@ class AdminNotificationSummaryResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title,
+            'message' => $this->message,
             'type' => $this->type,
-            'recipient_type' => $this->recipient_type,
-            'recipients_count' => $this->recipients_count ?? 1,
             'is_read' => $this->is_read,
             'sent_at' => $this->sent_at?->toIso8601String(),
+            'sender' => $this->whenLoaded('sentBy', fn () => $this->sentBy === null ? null : [
+                'full_name' => $this->sentBy->fullName(),
+            ]),
         ];
     }
 }

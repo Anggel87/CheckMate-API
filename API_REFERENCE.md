@@ -260,6 +260,7 @@ Tabla consolidada de **todos** los códigos de error del sistema (útil para map
 | `USR05` | 409 | No se puede dar de baja a un profesor con horarios activos |
 | `TUT01` | 404 | Tutor familiar no existe o no está asignado a ese alumno |
 | `TUT02` | 409 | No se puede eliminar al único tutor familiar de un alumno |
+| `NFC01` | 409 | El `nfc_uid` que se intenta asignar ya está en uso por otro usuario |
 
 ### Dispositivos (Administrador, Director, Device)
 
@@ -290,6 +291,7 @@ Tabla consolidada de **todos** los códigos de error del sistema (útil para map
 | `INC01` | 404 | Incidente no existe (o invisible por estar fuera de la carrera del director) |
 | `INC02` | 409 | Incidente ya cerrado, no se puede editar (usado por Profesor) |
 | `INC03` | 409 | Incidente ya cerrado/cancelado, no se puede editar/cerrar (usado por Director) |
+| `INC04` | 409 | Ya existe un incidente `ACTIVO` en toda la escuela — hay que cerrarlo antes de crear uno nuevo (usado por Administrador/Director/Profesor) |
 
 ### Reclamos y justificantes (Director, Profesor, Tutor Académico, Alumno)
 
@@ -570,7 +572,7 @@ Respuesta `AdminSchoolYearResource`: `id, name, start_date, end_date, status, gr
 
 | Método | Path | Notas |
 |---|---|---|
-| GET | `/subjects` | Query: `search`, `is_active` |
+| GET | `/subjects` | Query: `search`, `is_active`, `career_id` |
 | GET | `/subjects/{subject}` | |
 | POST | `/subjects` | ver body |
 | PUT/PATCH | `/subjects/{subject}` | mismos campos `sometimes` + `is_active` |
@@ -583,10 +585,13 @@ Respuesta `AdminSchoolYearResource`: `id, name, start_date, end_date, status, gr
 | `name` | `required, string, regex:/^.{3,100}$/` |
 | `code` | `required, string, regex:/^[A-Z0-9\-]{2,30}$/` |
 | `description` | `sometimes, nullable, string, max:255` |
+| `career_ids` | `sometimes, array` de ids de carrera — no todas las materias aplican a todas las carreras |
 
-Respuesta `AdminSubjectResource`: `id, name, code, description, is_active, schedules_count`.
+⚠️ **`career_ids` reemplaza siempre el conjunto completo** (`sync()`, no `attach()`): mandar `career_ids: []` explícitamente quita todas las carreras asignadas; omitir el campo por completo en un `PUT/PATCH` deja las carreras existentes sin tocar. Si algún id no corresponde a una carrera real → **404 `CAR01`**. La relación vive en la tabla pivote `career_subject` (migración `2026_08_21_130000`), sin campos propios más allá de las FKs.
 
-**Errores:** `SUBJ01` (404), `SUBJ02` (409, código duplicado), `SUBJ03` (409, baja con horarios activos).
+Respuesta `AdminSubjectResource`: `id, name, code, description, is_active, schedules_count, careers[{id,name,short_name}]` (`careers` solo aparece si la relación viene cargada, lo cual `index`/`show`/`store`/`update` siempre hacen).
+
+**Errores:** `SUBJ01` (404), `SUBJ02` (409, código duplicado), `SUBJ03` (409, baja con horarios activos), `CAR01` (404, algún `career_id` no existe).
 
 ### 8.6 Students
 
@@ -690,16 +695,43 @@ Rutas manuales (`index`, `show`, `store`, `resend` — **sin** `update`/`destroy
 | `title` | `required, string, min:3, max:90` |
 | `message` | `required, string, max:350` |
 | `type` | `required, in:INASISTENCIA,RETARDO,INCIDENTE,JUSTIFICANTE,RECLAMO,AVISO,RECLAMO_PROFESOR` |
-| `target` | `required, in:STUDENT,TUTOR,GROUP,CAREER,ALL` |
+| `target` | `required, in:STUDENT,TUTOR,GROUP,CAREER,ALL,TEACHER` |
 | `student_ids` | `required_if:target,STUDENT`, `required_if:target,TUTOR`, `array` |
 | `group_ids` | `required_if:target,GROUP`, `array` |
 | `career_ids` | `required_if:target,CAREER`, `array` |
+| `teacher_ids` | `required_if:target,TEACHER`, `array` — nuevo, solo con `target=TEACHER` |
+| `recipient_type` | `sometimes, in:TUTOR,STUDENT` — nuevo, ver abajo |
 
-Se envía **por tutor familiar activo con la preferencia de notificación correspondiente habilitada** (mapeo `type → preferencia`: `INASISTENCIA→absences`, `RETARDO→lates`, `INCIDENTE→incidents`, `JUSTIFICANTE→justifications`, `RECLAMO`/`RECLAMO_PROFESOR→claims`, resto→`announcements`). Intenta WhatsApp best-effort (no bloqueante). Si no se resuelve ningún destinatario válido → **422 `NOT02`**.
+⚠️ **`notifications.tutor_id`/`student_id` ya NO son NOT NULL** (migración `2026_08_20_190000`) — la tabla ahora soporta 3 canales de entrega vía la columna `recipient_type` (`TUTOR`/`STUDENT`/`TEACHER`, default `TUTOR` para no romper nada existente):
+
+- **`target` en `STUDENT,TUTOR,GROUP,CAREER,ALL`** (resuelve un conjunto de alumnos, igual que antes) + **`recipient_type` omitido o `TUTOR`** (default) → comportamiento **original, sin cambios**: WhatsApp a cada tutor familiar activo con la preferencia correspondiente habilitada (mapeo `type → preferencia`: `INASISTENCIA→absences`, `RETARDO→lates`, `INCIDENTE→incidents`, `JUSTIFICANTE→justifications`, `RECLAMO`/`RECLAMO_PROFESOR→claims`, resto→`announcements`). `AppNotification.recipient_type = TUTOR`, `tutor_id` set, `user_id` null.
+- Mismo `target`, pero **`recipient_type=STUDENT`** → **nuevo**: una fila por alumno, entregada dentro de la app directamente a su propia cuenta (`user_id = student_id`, `tutor_id` null, sin WhatsApp). El alumno la ve en `GET /alumno/notifications` (sección 12.5).
+- **`target=TEACHER`** → **nuevo**: `recipient_type` se fuerza siempre a `TEACHER` sin importar lo que se mande; una fila por profesor en `teacher_ids` (rol `profesor` o `tutor_academico`, `active=true`), dentro de la app (`user_id = teacher_id`, `student_id`/`tutor_id` null). Visible en `GET /profesor/notifications` (sección 11.4, compartido con `tutor_academico`).
+
+Si no se resuelve ningún destinatario válido → **422 `NOT02`**.
 
 Respuesta `store`/`resend` (ad-hoc, no Resource): `{ "id", "title", "type", "recipients_count", "sent_at" }`.
 
-`GET /notifications` — Query: `type`, `is_read`, `date_from`, `date_to`. `GET /notifications/{id}` — 404 `NOT01`. `POST /notifications/{id}/resend` — body igual a `store` pero todo `sometimes`; si no se manda `target`, reenvía solo al tutor original.
+⚠️ **Batching (migración `2026_08_20_193000`):** un envío a N destinatarios crea N filas (una por destinatario, comparten `batch_id`), pero el log solo muestra **una entrada por envío** — `index()`/`show()` agrupan por `batch_id` (fallback al propio `id` para filas legacy sin `batch_id`) y exponen el conteo/lista de destinatarios en vez de una fila por cada uno. El `id` expuesto en el log sigue siendo el `id` real de la fila representante del grupo (no el `batch_id`), así que las rutas `show`/`resend`/`read` no cambian de forma.
+
+`GET /notifications` — Query: `type`, `is_read`, `date_from`, `date_to`. `AdminNotificationSummaryResource`: `{id, title, type, recipient_type, recipients_count, is_read, sent_at}`. `GET /notifications/{id}` → `AdminNotificationResource`: agrega `message`, `student{id,full_name}|null`, `tutor{id,full_name}|null`, `teacher{id,full_name}` (solo si `recipient_type=TEACHER`), `sent_by{id,full_name}|null`, `recipients_count`, `recipients` (lista de nombres del batch completo). 404 `NOT01`. `POST /notifications/{id}/resend` — body igual a `store` pero todo `sometimes` (incluye `teacher_ids`/`recipient_type`); si no se manda `target`, reenvía a **todo el conjunto original de destinatarios del batch** (no solo al primero), agrupado bajo un nuevo `batch_id`. `PATCH /notifications/{id}/read` — sin body, marca `is_read=true` en **toda la fila del batch** (no solo la representante), para que el estado se mantenga consistente sin importar cuál fila quede como representante la próxima vez que se liste.
+
+### 8.8.1 Notifications (perspectiva Director) — `/director-carrera/notifications`
+
+Mismo contrato de `store` que arriba, pero **scoped a la carrera del director** vía `App\Services\Director\CareerScope` y **sin `target=ALL`** (un director nunca puede dirigirse a toda la escuela — `in:STUDENT,TUTOR,GROUP,CAREER,TEACHER`). `target=CAREER` no requiere `career_ids`: siempre son todas las carreras que dirige (`Career::where('director_id', ...)`, normalmente una sola). Para `GROUP`/`STUDENT`/`TUTOR`/`TEACHER`, cada id enviado se valida contra el conjunto permitido (`CareerScope::groupIds/studentIds/teacherIds`) — si **cualquier** id está fuera de su carrera, la petición completa se rechaza con **403 `PERM01`** (no se filtra en silencio).
+
+`GET /notifications` — a diferencia del admin, lista solo los avisos que el propio director envió (`sent_by_user_id = auth id`), no todos los de la escuela; mismo agrupado por `batch_id`. `GET /notifications/{id}` — mismo filtro por dueño, 404 `NOT01` si no es suyo. `PATCH /notifications/{id}/read` — igual que el de administrador (marca todo el batch), mismo filtro por dueño. No tiene `resend`.
+
+### 8.8.2 Notifications (bandeja de entrada — Alumno y Profesor/Tutor Académico)
+
+Nuevo, solo lectura de las notificaciones `STUDENT`/`TEACHER` recibidas directamente en la app (no incluye los avisos `TUTOR` que van por WhatsApp a los padres, esos nunca son visibles vía login):
+
+- `GET /alumno/notifications` — `AppNotification::where('user_id', auth id)->where('recipient_type', 'STUDENT')`.
+- `GET /profesor/notifications` — igual, `recipient_type = 'TEACHER'` (ruta compartida `role:profesor,tutor_academico`, así que `tutor_academico` la recibe también).
+- `GET .../notifications/{id}` — 404 `NOT01` si no existe o no es del usuario autenticado.
+- `PATCH .../notifications/{id}/read` — sin body, marca `is_read = true`, mismo chequeo de dueño.
+
+`RecipientNotificationResource`: `{id, title, message, type, is_read, sent_at, sender: {full_name}|null}`.
 
 ### 8.9 Permissions
 
@@ -741,6 +773,14 @@ Unicidad 1:1 manual por `schedule_id` → **409 `ATS02`** si ya existe.
 Respuesta `AdminAttendanceSettingResource`: `id, schedule_id, present_tolerance_minutes, late_tolerance_minutes, allow_manual_attendance, is_active, schedule{id,subject,group,day_of_week,start_time,end_time}` (solo en `show`/`index` con relación cargada).
 
 **Errores:** `SCH01` (404), `ATS01` (404), `ATS02` (409), `VAL01` (422).
+
+### 8.11 Nfc Cards — `/administrador/nfc-cards`
+
+Asigna/reemplaza el `nfc_uid` personalizado de **cualquier usuario** (alumno, profesor, tutor académico, director, admin) — la tarjeta física resultante funciona con el mismo mecanismo de `UserDetail` que ya usa el tap NFC (sección 7): una vez asignada, el usuario puede abrir sesión de clase (si es profesor) o registrar asistencia (si es alumno) con esa tarjeta.
+
+- `GET /nfc-cards` — Query: `search` (nombre/apellido/email), `role_id`, `has_card` (`true`/`false`), `active`. `AdminNfcCardResource`: `{id, full_name, email, role, active, nfc_uid}` (`nfc_uid` es `null` si el usuario no tiene fila en `user_details` o la tiene sin tarjeta asignada).
+- `PATCH /nfc-cards/{user}` — Body: `nfc_uid* (required, string, regex:/^[A-Za-z0-9:\- ]{1,100}$/, mismo patrón que `/device/nfc`)`. Si el usuario no tiene fila en `user_details` todavía (la mayoría no la tiene — hoy solo la crea el seeder de demo), se crea aquí mismo con un `qr_uuid` generado (`Str::uuid()`), ya que la columna es `NOT NULL`/`unique` y no es responsabilidad de esta pantalla. **409 `NFC01`** si ese `nfc_uid` ya está asignado a otro usuario (validado a nivel de aplicación — la columna `nfc_uid` en BD **no** tiene constraint `unique` intencionalmente, ver comentario "TEMPORAL" en la migración de `user_details`, así que la duplicidad solo se previene aquí). 404 `USR01` si el usuario no existe.
+- `DELETE /nfc-cards/{user}` — quita la tarjeta (`nfc_uid = null`) **sin borrar la fila** de `user_details` (conserva el `qr_uuid`). 404 `USR01`.
 
 ---
 
@@ -808,6 +848,10 @@ Mismo controlador/reglas de negocio que Profesor (sección 10.4) más el flujo d
 | `student_ids` | `required, array, min:1` |
 | `student_ids.*` | `integer, exists:users,id` |
 | `evidence` | `nullable, file` |
+
+⚠️ **Un solo incidente `ACTIVO` en toda la escuela a la vez** (sin importar el módulo/rol que lo haya creado): si ya existe cualquier incidente con `status=ACTIVO`, `POST /incidents` responde **409 `INC04`** en Administrador, Director y Profesor por igual — hay que cerrarlo (`close` en Administrador/Director, o esperar a que se cierre) antes de poder reportar uno nuevo.
+
+⚠️ **Notificación escolar global al crear**: cada incidente creado dispara `NotificationService::broadcastSchoolWide('INCIDENTE', title, message)` — WhatsApp a los tutores de **todos** los alumnos activos (según su preferencia `incidents`), aviso en la app a **todos** los alumnos activos, y aviso en la app a **todos** los profesores/tutores académicos activos. No se limita a la carrera/grupo del incidente ni de quien lo reporta. Todas las filas comparten un solo `batch_id` (aparecen como una sola entrada en el log de notificaciones, sección 8.8).
 
 **Body `PATCH /incidents/{id}/students`:**
 
@@ -957,6 +1001,8 @@ Esta misma lógica de cierre la ejecuta automáticamente el comando `class-sessi
 | `evidence` | `nullable, file` |
 
 ⚠️ **Limitación documentada en el propio código**: `incidents.schedule_id` es `NOT NULL` en BD pero este endpoint no recibe `schedule_id`; se usa como "ancla" el primer horario activo del profesor en el primer `group_id` indicado, o cualquiera si no se mandan `group_ids`. Si el profesor no tiene ningún horario activo → 403 `PERM01`. Por cada `group_id`, se adjunta a **todos** los alumnos activos de ese grupo en el checklist con `status: DESCONOCIDO`.
+
+⚠️ **Un solo incidente `ACTIVO` en toda la escuela a la vez** (ver detalle en sección 9.5) — 409 `INC04` si ya hay uno activo, sin importar quién lo reportó. Al crear, se dispara la misma notificación escolar global descrita en 9.5 (WhatsApp a tutores + aviso en la app a todos los alumnos y profesores activos).
 
 `PUT /incidents/{id}` — campos `sometimes` iguales a `store`. ⚠️ `group_ids` se valida pero **el controlador lo ignora silenciosamente** (no reasigna grupos ni schedule ancla). 403 `PERM01` (solo el creador edita), 409 `INC02` (ya cerrado).
 

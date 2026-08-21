@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Administrador;
+namespace App\Http\Requests\Director;
 
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -20,19 +20,16 @@ class StoreNotificationRequest extends FormRequest
             'title' => ['required', 'string', 'min:3', 'max:90'],
             'message' => ['required', 'string', 'max:350'],
             'type' => ['required', 'string', 'in:INASISTENCIA,RETARDO,INCIDENTE,JUSTIFICANTE,RECLAMO,AVISO,RECLAMO_PROFESOR'],
-            'target' => ['required', 'string', 'in:STUDENT,TUTOR,GROUP,CAREER,ALL,TEACHER'],
+            // Sin ALL: el director nunca puede dirigirse a toda la escuela, solo a su
+            // propia carrera. CAREER no requiere career_ids: siempre son las carreras
+            // que dirige, resueltas en el controlador via CareerScope.
+            'target' => ['required', 'string', 'in:STUDENT,TUTOR,GROUP,CAREER,TEACHER'],
             'student_ids' => ['required_if:target,STUDENT', 'required_if:target,TUTOR', 'array'],
             'student_ids.*' => ['integer'],
             'group_ids' => ['required_if:target,GROUP', 'array'],
             'group_ids.*' => ['integer'],
-            'career_ids' => ['required_if:target,CAREER', 'array'],
-            'career_ids.*' => ['integer'],
             'teacher_ids' => ['required_if:target,TEACHER', 'array'],
             'teacher_ids.*' => ['integer'],
-            // Solo aplica cuando target resuelve un conjunto de alumnos (STUDENT/TUTOR/
-            // GROUP/CAREER/ALL): TUTOR (default, WhatsApp al tutor familiar, comportamiento
-            // original) o STUDENT (nuevo, directo en la app). Para target=TEACHER el
-            // controlador siempre fuerza recipient_type=TEACHER sin importar este valor.
             'recipient_type' => ['sometimes', 'string', 'in:TUTOR,STUDENT'],
         ];
     }
@@ -50,7 +47,6 @@ class StoreNotificationRequest extends FormRequest
             'target.in' => 'El destino indicado no es válido.',
             'student_ids.required_if' => 'Debes indicar al menos un alumno.',
             'group_ids.required_if' => 'Debes indicar al menos un grupo.',
-            'career_ids.required_if' => 'Debes indicar al menos una carrera.',
             'teacher_ids.required_if' => 'Debes indicar al menos un profesor.',
             'recipient_type.in' => 'El tipo de destinatario indicado no es válido.',
         ];

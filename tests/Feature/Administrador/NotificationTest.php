@@ -104,6 +104,58 @@ test('creates a notification targeting a career and fans out to every student', 
     $response->assertCreated()->assertJsonPath('data.recipients_count', 1);
 });
 
+test('creates an in-app notification targeting a student directly', function () {
+    $student = User::factory()->student()->create();
+    $tutor = Tutor::factory()->create();
+    $student->tutors()->attach($tutor->id, ['relationship' => 'Madre', 'is_primary' => true, 'receives_notifications' => true]);
+    $admin = makeAdmin();
+    $token = fakeGovernanceAuth($admin);
+
+    $response = $this->postJson('/api/v1/administrador/notifications', [
+        'title' => 'Junta de padres',
+        'message' => 'La junta será el viernes.',
+        'type' => 'AVISO',
+        'target' => 'STUDENT',
+        'student_ids' => [$student->id],
+        'recipient_type' => 'STUDENT',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()->assertJsonPath('data.recipients_count', 1);
+
+    $this->assertDatabaseHas('notifications', [
+        'user_id' => $student->id,
+        'student_id' => $student->id,
+        'tutor_id' => null,
+        'recipient_type' => 'STUDENT',
+        'sent_by_user_id' => $admin->id,
+    ]);
+    $this->assertDatabaseMissing('notifications', ['tutor_id' => $tutor->id]);
+});
+
+test('creates an in-app notification targeting teachers', function () {
+    $teacher = User::factory()->teacher()->create(['active' => true]);
+    $admin = makeAdmin();
+    $token = fakeGovernanceAuth($admin);
+
+    $response = $this->postJson('/api/v1/administrador/notifications', [
+        'title' => 'Junta docente',
+        'message' => 'La junta será el lunes.',
+        'type' => 'AVISO',
+        'target' => 'TEACHER',
+        'teacher_ids' => [$teacher->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()->assertJsonPath('data.recipients_count', 1);
+
+    $this->assertDatabaseHas('notifications', [
+        'user_id' => $teacher->id,
+        'student_id' => null,
+        'tutor_id' => null,
+        'recipient_type' => 'TEACHER',
+        'sent_by_user_id' => $admin->id,
+    ]);
+});
+
 test('rejects a notification with no valid recipients', function () {
     $token = fakeGovernanceAuth(makeAdmin());
 
@@ -167,4 +219,39 @@ test('returns not found for a missing notification', function () {
     $response = $this->getJson('/api/v1/administrador/notifications/999999', ['Authorization' => "Bearer {$token}"]);
 
     $response->assertNotFound()->assertJsonPath('error_code', 'NOT01');
+});
+
+test('marks a notification as read', function () {
+    ['student' => $student, 'tutor' => $tutor] = makeStudentWithTutor();
+    $notification = AppNotification::create(['student_id' => $student->id, 'tutor_id' => $tutor->id, 'title' => 'Aviso', 'message' => 'msj', 'type' => 'AVISO', 'is_read' => false, 'sent_at' => now()]);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->patchJson("/api/v1/administrador/notifications/{$notification->id}/read", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.is_read', true);
+    $this->assertDatabaseHas('notifications', ['id' => $notification->id, 'is_read' => true]);
+});
+
+test('marks every row of a batch as read when the notification was sent to several recipients', function () {
+    $group = makeActiveGroup();
+    makeStudentWithTutor($group->id);
+    makeStudentWithTutor($group->id);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $this->postJson('/api/v1/administrador/notifications', [
+        'title' => 'Aviso de grupo',
+        'message' => 'Mensaje para el grupo.',
+        'type' => 'AVISO',
+        'target' => 'GROUP',
+        'group_ids' => [$group->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $list = $this->getJson('/api/v1/administrador/notifications', ['Authorization' => "Bearer {$token}"]);
+    $representativeId = $list->json('data.0.id');
+
+    $this->patchJson("/api/v1/administrador/notifications/{$representativeId}/read", [], ['Authorization' => "Bearer {$token}"])
+        ->assertOk();
+
+    $batchId = AppNotification::find($representativeId)->batch_id;
+    expect(AppNotification::where('batch_id', $batchId)->where('is_read', false)->count())->toBe(0);
 });

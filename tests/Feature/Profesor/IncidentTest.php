@@ -120,6 +120,19 @@ test('records a history trail as an incident is created, edited and its checklis
     expect($response->json('data.history.2.after.status'))->toBe('PRESENTE');
 });
 
+test('rejects creating an incident while another one is active, even one reported by another role', function () {
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    Incident::factory()->create(['schedule_id' => $schedule->id, 'status' => 'ACTIVO']);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson('/api/v1/profesor/incidents', [
+        'type' => 'FIRE',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'INC04');
+});
+
 test('lists only incidents reported by the teacher', function () {
     ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule();
     $mine = Incident::factory()->create(['reported_by_user_id' => $teacher->id, 'schedule_id' => $schedule->id]);

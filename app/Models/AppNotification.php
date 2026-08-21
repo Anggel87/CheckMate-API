@@ -9,9 +9,11 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $student_id
- * @property int $tutor_id
- * @property int $user_id
+ * @property int|null $student_id
+ * @property int|null $tutor_id
+ * @property int|null $user_id
+ * @property string $recipient_type TUTOR (WhatsApp al tutor familiar) | STUDENT | TEACHER (ambas en la app, via user_id)
+ * @property string|null $batch_id Agrupa las filas creadas por un mismo envio (un aviso a N destinatarios) para que el log muestre una sola entrada
  * @property int|null $sent_by_user_id
  * @property string $title
  * @property string $message
@@ -29,6 +31,8 @@ class AppNotification extends Model
         'student_id',
         'tutor_id',
         'user_id',
+        'recipient_type',
+        'batch_id',
         'sent_by_user_id',
         'title',
         'message',

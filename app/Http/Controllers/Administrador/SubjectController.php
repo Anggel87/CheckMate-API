@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Administrador\StoreSubjectRequest;
 use App\Http\Requests\Administrador\UpdateSubjectRequest;
 use App\Http\Resources\AdminSubjectResource;
+use App\Models\Career;
 use App\Models\Subject;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,9 @@ class SubjectController extends Controller
     {
         $subjects = Subject::query()
             ->withCount('schedules')
+            ->with('careers')
             ->when($request->query('search'), fn ($query, $search) => $query->where('name', 'like', "%{$search}%"))
+            ->when($request->query('career_id'), fn ($query, $careerId) => $query->whereHas('careers', fn ($query) => $query->where('careers.id', $careerId)))
             ->when($request->has('is_active'), fn ($query) => $query->where('is_active', $request->boolean('is_active')))
             ->get();
 
@@ -30,7 +33,7 @@ class SubjectController extends Controller
 
     public function show(int $subject): JsonResponse
     {
-        $model = Subject::withCount('schedules')->find($subject);
+        $model = Subject::withCount('schedules')->with('careers')->find($subject);
 
         if ($model === null) {
             throw ApiException::notFound('La materia solicitada no existe.', 'SUBJ01');
@@ -47,9 +50,13 @@ class SubjectController extends Controller
             throw ApiException::conflict('Ya existe una materia registrada con ese código.', 'SUBJ02');
         }
 
-        $subject = Subject::create($data);
+        $careerIds = $data['career_ids'] ?? [];
+        $this->assertCareersExist($careerIds);
 
-        return $this->successResponse('Materia creada correctamente.', new AdminSubjectResource($subject), 201);
+        $subject = Subject::create(collect($data)->except('career_ids')->all());
+        $subject->careers()->sync($careerIds);
+
+        return $this->successResponse('Materia creada correctamente.', new AdminSubjectResource($subject->load('careers')), 201);
     }
 
     public function update(UpdateSubjectRequest $request, int $subject): JsonResponse
@@ -66,9 +73,31 @@ class SubjectController extends Controller
             throw ApiException::conflict('Ya existe una materia registrada con ese código.', 'SUBJ02');
         }
 
-        $model->update($data);
+        if (array_key_exists('career_ids', $data)) {
+            $this->assertCareersExist($data['career_ids']);
+        }
 
-        return $this->successResponse('Materia actualizada correctamente.', new AdminSubjectResource($model));
+        $model->update(collect($data)->except('career_ids')->all());
+
+        if (array_key_exists('career_ids', $data)) {
+            $model->careers()->sync($data['career_ids']);
+        }
+
+        return $this->successResponse('Materia actualizada correctamente.', new AdminSubjectResource($model->load('careers')));
+    }
+
+    /**
+     * @param  array<int, int>  $careerIds
+     */
+    private function assertCareersExist(array $careerIds): void
+    {
+        if ($careerIds === []) {
+            return;
+        }
+
+        if (Career::whereIn('id', $careerIds)->count() !== count(array_unique($careerIds))) {
+            throw ApiException::notFound('Una o mas carreras indicadas no existen.', 'CAR01');
+        }
     }
 
     public function destroy(Request $request, int $subject): JsonResponse

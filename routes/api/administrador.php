@@ -9,6 +9,7 @@ use App\Http\Controllers\Administrador\ClassroomController;
 use App\Http\Controllers\Administrador\DeviceController;
 use App\Http\Controllers\Administrador\GroupController;
 use App\Http\Controllers\Administrador\IncidentController;
+use App\Http\Controllers\Administrador\NfcCardController;
 use App\Http\Controllers\Administrador\NotificationController;
 use App\Http\Controllers\Administrador\PermissionController;
 use App\Http\Controllers\Administrador\ScheduleController;
@@ -55,9 +56,14 @@ Route::prefix('administrador')->middleware(['governance.auth', 'role:administrad
     Route::delete('users/{user}/permissions/override/{override}', [PermissionController::class, 'destroyOverride']);
 
     Route::post('notifications/{notification}/resend', [NotificationController::class, 'resend']);
+    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::get('notifications/{notification}', [NotificationController::class, 'show']);
     Route::post('notifications', [NotificationController::class, 'store']);
+
+    Route::get('nfc-cards', [NfcCardController::class, 'index']);
+    Route::patch('nfc-cards/{user}', [NfcCardController::class, 'update']);
+    Route::delete('nfc-cards/{user}', [NfcCardController::class, 'destroy']);
 
     Route::get('incidents/active', [IncidentController::class, 'active']);
     Route::get('incidents', [IncidentController::class, 'index']);

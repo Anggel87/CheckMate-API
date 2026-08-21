@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Alumno\ClaimController;
 use App\Http\Controllers\Alumno\JustificationController;
+use App\Http\Controllers\Alumno\NotificationController;
 use App\Http\Controllers\Alumno\ProfileController;
 use App\Http\Controllers\Alumno\ScheduleController;
 use App\Http\Controllers\Alumno\SubjectController;
@@ -25,6 +26,10 @@ Route::prefix('alumno')
         Route::get('/justifications/{justification}', [JustificationController::class, 'show'])->name('justifications.show');
         Route::put('/justifications/{justification}', [JustificationController::class, 'update'])->name('justifications.update');
         Route::delete('/justifications/{justification}', [JustificationController::class, 'destroy'])->name('justifications.destroy');
+
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');

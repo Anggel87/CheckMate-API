@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Director;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\GroupStudentResource;
 use App\Http\Resources\JustificationResource;
 use App\Http\Resources\StudentAttendanceResource;
 use App\Http\Resources\StudentProfileResource;
@@ -17,6 +18,20 @@ use Illuminate\Http\Request;
 class StudentController extends Controller
 {
     use ApiResponse;
+
+    /**
+     * Roster completo del director (todos sus grupos/carreras juntos), usado por el
+     * selector de destinatarios al componer una notificacion.
+     */
+    public function index(Request $request, CareerScope $scope): JsonResponse
+    {
+        $careerIds = $scope->assertHasCareer($request->user());
+        $studentIds = $scope->studentIds($careerIds);
+
+        $students = User::query()->whereKey($studentIds)->where('active', true)->get();
+
+        return $this->successResponse('Alumnos obtenidos correctamente.', GroupStudentResource::collection($students));
+    }
 
     public function show(Request $request, int $student, CareerScope $scope): JsonResponse
     {

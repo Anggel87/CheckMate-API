@@ -19,6 +19,11 @@ class AdminSubjectResource extends JsonResource
             'description' => $this->description,
             'is_active' => $this->is_active,
             'schedules_count' => $this->whenCounted('schedules'),
+            'careers' => $this->whenLoaded('careers', fn () => $this->careers->map(fn ($career) => [
+                'id' => $career->id,
+                'name' => $career->name,
+                'short_name' => $career->short_name,
+            ])->values()),
         ];
     }
 }

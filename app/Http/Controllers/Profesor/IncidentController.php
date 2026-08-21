@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Profesor;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\GuardsSingleActiveIncident;
 use App\Http\Controllers\Concerns\LoadsIncidentHistory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
@@ -16,13 +17,14 @@ use App\Models\Group;
 use App\Models\Incident;
 use App\Models\Schedule;
 use App\Services\AuditLogger;
+use App\Services\NotificationService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class IncidentController extends Controller
 {
-    use ApiResponse, LoadsIncidentHistory, ValidatesEvidenceFile;
+    use ApiResponse, GuardsSingleActiveIncident, LoadsIncidentHistory, ValidatesEvidenceFile;
 
     public function index(Request $request): JsonResponse
     {
@@ -69,10 +71,11 @@ class IncidentController extends Controller
         return $this->successResponse('Incidente obtenido correctamente.', new IncidentDetailResource($incidentModel));
     }
 
-    public function store(StoreIncidentRequest $request, AuditLogger $auditLogger): JsonResponse
+    public function store(StoreIncidentRequest $request, AuditLogger $auditLogger, NotificationService $notificationService): JsonResponse
     {
         $data = $request->validated();
 
+        $this->assertNoActiveIncidentExists();
         $this->assertValidEvidence($request->file('evidence'));
 
         // incidents.schedule_id es NN pero el .md no manda un schedule_id en el body de
@@ -134,6 +137,8 @@ class IncidentController extends Controller
             'severity' => $incident->severity,
             'status' => $incident->status,
         ]);
+
+        $this->notifySchoolWideIncident($incident, $request->user()->id, $notificationService);
 
         $this->loadIncidentHistory($incident);
 

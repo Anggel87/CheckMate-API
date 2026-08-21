@@ -4,6 +4,7 @@ use App\Http\Controllers\Profesor\ClaimController;
 use App\Http\Controllers\Profesor\GroupController;
 use App\Http\Controllers\Profesor\IncidentController;
 use App\Http\Controllers\Profesor\JustificationController;
+use App\Http\Controllers\Profesor\NotificationController;
 use App\Http\Controllers\Profesor\ProfileController;
 use App\Http\Controllers\Profesor\ScheduleController;
 use App\Http\Controllers\Profesor\SessionController;
@@ -45,4 +46,8 @@ Route::prefix('profesor')
 
         Route::get('/claims', [ClaimController::class, 'index'])->name('claims.index');
         Route::get('/claims/{claim}', [ClaimController::class, 'show'])->name('claims.show');
+
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
     });

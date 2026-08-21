@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Career;
 use App\Models\Schedule;
 use App\Models\Subject;
 
@@ -72,4 +73,61 @@ test('blocks deactivating a subject with active schedules', function () {
     $response = $this->deleteJson("/api/v1/administrador/subjects/{$subject->id}", ['confirm' => true], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertConflict()->assertJsonPath('error_code', 'SUBJ03');
+});
+
+test('creates a subject assigned to several careers', function () {
+    $careerA = Career::factory()->create();
+    $careerB = Career::factory()->create();
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->postJson('/api/v1/administrador/subjects', [
+        'name' => 'Base de Datos',
+        'code' => 'BD-101',
+        'career_ids' => [$careerA->id, $careerB->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()->assertJsonCount(2, 'data.careers');
+    $this->assertDatabaseHas('career_subject', ['career_id' => $careerA->id]);
+    $this->assertDatabaseHas('career_subject', ['career_id' => $careerB->id]);
+});
+
+test('rejects assigning a subject to a career that does not exist', function () {
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->postJson('/api/v1/administrador/subjects', [
+        'name' => 'Base de Datos',
+        'code' => 'BD-101',
+        'career_ids' => [999999],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertNotFound()->assertJsonPath('error_code', 'CAR01');
+});
+
+test('replaces the careers of a subject on update', function () {
+    $careerA = Career::factory()->create();
+    $careerB = Career::factory()->create();
+    $subject = Subject::factory()->create();
+    $subject->careers()->sync([$careerA->id]);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->putJson("/api/v1/administrador/subjects/{$subject->id}", [
+        'career_ids' => [$careerB->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(1, 'data.careers')->assertJsonPath('data.careers.0.id', $careerB->id);
+    $this->assertDatabaseMissing('career_subject', ['subject_id' => $subject->id, 'career_id' => $careerA->id]);
+});
+
+test('filters subjects by career', function () {
+    $careerA = Career::factory()->create();
+    $careerB = Career::factory()->create();
+    $subjectA = Subject::factory()->create();
+    $subjectA->careers()->sync([$careerA->id]);
+    $subjectB = Subject::factory()->create();
+    $subjectB->careers()->sync([$careerB->id]);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->getJson("/api/v1/administrador/subjects?career_id={$careerA->id}", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $subjectA->id);
 });

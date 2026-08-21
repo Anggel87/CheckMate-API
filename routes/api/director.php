@@ -6,6 +6,7 @@ use App\Http\Controllers\Director\ClaimController;
 use App\Http\Controllers\Director\DeviceController;
 use App\Http\Controllers\Director\GroupController;
 use App\Http\Controllers\Director\IncidentController;
+use App\Http\Controllers\Director\NotificationController;
 use App\Http\Controllers\Director\StudentController;
 use App\Http\Controllers\Director\TeacherController;
 use Illuminate\Support\Facades\Route;
@@ -16,6 +17,7 @@ Route::prefix('director-carrera')->middleware(['governance.auth', 'role:director
     Route::get('groups/{group}/students', [GroupController::class, 'students']);
     Route::get('groups/{group}/schedule', [GroupController::class, 'schedule']);
 
+    Route::get('students', [StudentController::class, 'index']);
     Route::get('students/{student}', [StudentController::class, 'show']);
     Route::get('students/{student}/attendance', [StudentController::class, 'attendance']);
     Route::get('students/{student}/justifications', [StudentController::class, 'justifications']);
@@ -35,6 +37,11 @@ Route::prefix('director-carrera')->middleware(['governance.auth', 'role:director
     Route::get('claims', [ClaimController::class, 'index']);
     Route::get('claims/{claim}', [ClaimController::class, 'show']);
     Route::patch('claims/{claim}/action', [ClaimController::class, 'action']);
+
+    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::get('notifications/{notification}', [NotificationController::class, 'show']);
+    Route::post('notifications', [NotificationController::class, 'store']);
 
     Route::get('charts/summary', [ChartController::class, 'summary']);
     Route::get('charts/general', [ChartController::class, 'general']);

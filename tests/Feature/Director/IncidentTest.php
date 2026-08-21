@@ -102,6 +102,25 @@ test('rejects closing an already closed incident', function () {
     $response->assertConflict()->assertJsonPath('error_code', 'INC03');
 });
 
+test('rejects creating an incident while another one is active, even one reported by another role', function () {
+    ['director' => $director, 'group' => $group] = makeCareerDirector();
+    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    Incident::factory()->create(['schedule_id' => $schedule->id, 'status' => 'ACTIVO']);
+
+    $token = fakeGovernanceAuth($director);
+
+    $response = $this->postJson('/api/v1/director-carrera/incidents', [
+        'type' => 'FIRE',
+        'title' => 'Otro incidente',
+        'severity' => 'ALTA',
+        'schedule_id' => $schedule->id,
+        'student_ids' => [$student->id],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'INC04');
+});
+
 test('updates the emergency roster status of an incident', function () {
     ['director' => $director, 'group' => $group] = makeCareerDirector();
     ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);

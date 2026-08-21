@@ -21,6 +21,8 @@ class UpdateSubjectRequest extends FormRequest
             'code' => ['sometimes', 'string', 'regex:/^[A-Z0-9\-]{2,30}$/'],
             'description' => ['sometimes', 'nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
+            'career_ids' => ['sometimes', 'array'],
+            'career_ids.*' => ['integer'],
         ];
     }
 

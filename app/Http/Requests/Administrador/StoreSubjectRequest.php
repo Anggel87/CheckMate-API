@@ -20,6 +20,8 @@ class StoreSubjectRequest extends FormRequest
             'name' => ['required', 'string', 'regex:/^.{3,100}$/'],
             'code' => ['required', 'string', 'regex:/^[A-Z0-9\-]{2,30}$/'],
             'description' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'career_ids' => ['sometimes', 'array'],
+            'career_ids.*' => ['integer'],
         ];
     }
 
