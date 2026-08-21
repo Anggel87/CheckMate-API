@@ -10,6 +10,7 @@ use App\Services\Administrador\Concerns\SendsWelcomePasswordEmail;
 use App\Services\Governance\GovernanceClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -21,9 +22,11 @@ class CreateStudentService
 
     /**
      * @param  array<string, mixed>  $studentData
-     * @param  array<string, mixed>  $tutorData
+     * @param  array<string, mixed>|null  $tutorData  Unprefixed shape (first_name, first_surname,
+     *                                                 second_surname, phone, relationship) — un
+     *                                                 alumno puede crearse sin tutor todavia.
      */
-    public function create(array $studentData, array $tutorData, ?UploadedFile $photo): User
+    public function create(array $studentData, ?array $tutorData, ?UploadedFile $photo): User
     {
         if (User::where('email', $studentData['email'])->exists()) {
             throw ApiException::conflict('Ya existe un usuario registrado con ese correo.', 'USR04');
@@ -53,19 +56,9 @@ class CreateStudentService
             'photo' => $photoPath,
         ]);
 
-        $tutor = Tutor::create([
-            'first_name' => $tutorData['tutor_first_name'],
-            'first_surname' => $tutorData['tutor_first_surname'],
-            'second_surname' => $tutorData['tutor_second_surname'] ?? '',
-            'phone' => $tutorData['tutor_phone'],
-            'is_active' => true,
-        ]);
-
-        $student->tutors()->attach($tutor->id, [
-            'relationship' => $tutorData['tutor_relationship'],
-            'is_primary' => true,
-            'receives_notifications' => true,
-        ]);
+        if ($tutorData !== null) {
+            $this->attachTutor($student, $tutorData, isPrimary: true);
+        }
 
         $temporaryPassword = $response['data']['temporary_password'] ?? null;
         $student->temporary_password = $temporaryPassword;
@@ -75,5 +68,32 @@ class CreateStudentService
         }
 
         return $student;
+    }
+
+    /**
+     * @param  array<string, mixed>  $tutorData
+     */
+    public function attachTutor(User $student, array $tutorData, bool $isPrimary = false): Tutor
+    {
+        $tutor = Tutor::create([
+            'first_name' => $tutorData['first_name'],
+            'second_name' => $tutorData['second_name'] ?? null,
+            'first_surname' => $tutorData['first_surname'],
+            'second_surname' => $tutorData['second_surname'] ?? '',
+            'phone' => $tutorData['phone'],
+            'is_active' => true,
+        ]);
+
+        if ($isPrimary) {
+            DB::table('student_tutor')->where('student_id', $student->id)->update(['is_primary' => false]);
+        }
+
+        $student->tutors()->attach($tutor->id, [
+            'relationship' => $tutorData['relationship'],
+            'is_primary' => $isPrimary,
+            'receives_notifications' => $tutorData['receives_notifications'] ?? true,
+        ]);
+
+        return $tutor;
     }
 }

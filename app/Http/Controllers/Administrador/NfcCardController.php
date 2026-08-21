@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Administrador;
 
 use App\Exceptions\ApiException;
+use App\Http\Controllers\Concerns\AssignsNfcUid;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Administrador\SetNfcUidRequest;
 use App\Http\Resources\AdminNfcCardResource;
@@ -11,11 +12,10 @@ use App\Models\UserDetail;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class NfcCardController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AssignsNfcUid;
 
     public function index(Request $request): JsonResponse
     {
@@ -48,25 +48,7 @@ class NfcCardController extends Controller
         $model = $this->findUser($user);
         $data = $request->validated();
 
-        $conflict = UserDetail::where('nfc_uid', $data['nfc_uid'])
-            ->where('user_id', '!=', $model->id)
-            ->first();
-
-        if ($conflict !== null) {
-            throw ApiException::conflict('Esa tarjeta NFC ya está asignada a otro usuario.', 'NFC01');
-        }
-
-        $detail = UserDetail::where('user_id', $model->id)->first();
-
-        if ($detail === null) {
-            UserDetail::create([
-                'user_id' => $model->id,
-                'nfc_uid' => $data['nfc_uid'],
-                'qr_uuid' => (string) Str::uuid(),
-            ]);
-        } else {
-            $detail->update(['nfc_uid' => $data['nfc_uid']]);
-        }
+        $this->assignNfcUid($model, $data['nfc_uid']);
 
         return $this->successResponse('Tarjeta NFC asignada correctamente.', new AdminNfcCardResource($model->load(['role', 'details'])));
     }

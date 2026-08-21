@@ -17,6 +17,7 @@ use App\Http\Controllers\Administrador\SchoolYearController;
 use App\Http\Controllers\Administrador\StudentController;
 use App\Http\Controllers\Administrador\SubjectController;
 use App\Http\Controllers\Administrador\TeacherController;
+use App\Http\Controllers\Administrador\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('administrador')->middleware(['governance.auth', 'role:administrador'])->group(function () {
@@ -50,6 +51,7 @@ Route::prefix('administrador')->middleware(['governance.auth', 'role:administrad
     Route::patch('teachers/{teacher}/academic-tutor', [TeacherController::class, 'toggleAcademicTutor']);
     Route::apiResource('teachers', TeacherController::class);
 
+    Route::post('users', [UserController::class, 'store']);
     Route::get('users/permissions', [PermissionController::class, 'index']);
     Route::get('users/{user}/permissions', [PermissionController::class, 'show']);
     Route::post('users/{user}/permissions/override', [PermissionController::class, 'storeOverride']);

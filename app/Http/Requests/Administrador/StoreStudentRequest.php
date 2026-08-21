@@ -27,11 +27,11 @@ class StoreStudentRequest extends FormRequest
             'gender' => ['required', 'string', 'in:M,F,OTRO'],
             'group_id' => ['required', 'integer'],
             'photo' => ['sometimes', 'nullable', 'file'],
-            'tutor_first_name' => ['required', 'string', 'max:45'],
-            'tutor_first_surname' => ['required', 'string', 'max:45'],
+            'tutor_first_name' => ['sometimes', 'nullable', 'string', 'max:45'],
+            'tutor_first_surname' => ['required_with:tutor_first_name', 'string', 'max:45'],
             'tutor_second_surname' => ['sometimes', 'nullable', 'string', 'max:45'],
-            'tutor_phone' => ['required', 'string', 'regex:/^\d{10}$/'],
-            'tutor_relationship' => ['required', 'string', 'max:50'],
+            'tutor_phone' => ['required_with:tutor_first_name', 'string', 'regex:/^\d{10}$/'],
+            'tutor_relationship' => ['required_with:tutor_first_name', 'string', 'max:50'],
         ];
     }
 

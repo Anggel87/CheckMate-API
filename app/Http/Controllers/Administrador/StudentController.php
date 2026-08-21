@@ -73,10 +73,13 @@ class StudentController extends Controller
             'email', 'phone', 'birth_date', 'gender', 'group_id',
         ])->all();
 
-        $tutorData = collect($data)->only([
-            'tutor_first_name', 'tutor_first_surname', 'tutor_second_surname',
-            'tutor_phone', 'tutor_relationship',
-        ])->all();
+        $tutorData = isset($data['tutor_first_name']) ? [
+            'first_name' => $data['tutor_first_name'],
+            'first_surname' => $data['tutor_first_surname'],
+            'second_surname' => $data['tutor_second_surname'] ?? '',
+            'phone' => $data['tutor_phone'],
+            'relationship' => $data['tutor_relationship'],
+        ] : null;
 
         $student = $service->create($studentData, $tutorData, $request->file('photo'));
 

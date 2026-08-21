@@ -50,6 +50,27 @@ test('creates a student with its primary tutor', function () {
         && $mail->temporaryPassword === 'Temp1234!');
 });
 
+test('creates a student without a tutor', function () {
+    Mail::fake();
+    $group = makeActiveGroup();
+    $token = fakeGovernanceAuth(makeAdmin());
+    fakeGovernanceCreateUser();
+
+    $response = $this->postJson('/api/v1/administrador/students', [
+        'first_name' => 'Juan',
+        'first_surname' => 'Ramírez',
+        'second_surname' => 'Torres',
+        'email' => 'juan.ramirez@example.com',
+        'phone' => '8711234567',
+        'birth_date' => '2006-05-10',
+        'gender' => 'M',
+        'group_id' => $group->id,
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()->assertJsonCount(0, 'data.tutors');
+    $this->assertDatabaseHas('users', ['email' => 'juan.ramirez@example.com', 'group_id' => $group->id]);
+});
+
 test('rejects a duplicate student email', function () {
     $group = makeActiveGroup();
     $existing = User::factory()->student()->create(['group_id' => $group->id]);

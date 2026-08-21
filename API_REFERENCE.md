@@ -602,7 +602,7 @@ Respuesta `AdminSubjectResource`: `id, name, code, description, is_active, sched
 |---|---|---|
 | GET | `/students` | Query: `search`, `group_id`, `career_id`, `active` |
 | GET | `/students/{student}` | Carga `tutors` |
-| POST | `/students` | crea alumno **y** su primer tutor familiar |
+| POST | `/students` | crea alumno, opcionalmente con su primer tutor familiar |
 | PUT/PATCH | `/students/{student}` | sin campos `tutor_*` |
 | DELETE | `/students/{student}` | baja lógica, `confirm=true` |
 | POST | `/students/{student}/tutors` | agregar tutor familiar |
@@ -623,13 +623,13 @@ Respuesta `AdminSubjectResource`: `id, name, code, description, is_active, sched
 | `gender` | `required, string, in:M,F,OTRO` |
 | `group_id` | `required, integer` (404 `GRP02` si no existe) |
 | `photo` | `sometimes, nullable, file` (máx 3MB, jpeg/png) |
-| `tutor_first_name` | `required, string, max:45` |
-| `tutor_first_surname` | `required, string, max:45` |
+| `tutor_first_name` | `sometimes, nullable, string, max:45` — si se manda, activa el resto de `tutor_*` como requeridos (`required_with:tutor_first_name`) |
+| `tutor_first_surname` | `required_with:tutor_first_name, string, max:45` |
 | `tutor_second_surname` | `sometimes, nullable, string, max:45` |
-| `tutor_phone` | `required, string, regex:/^\d{10}$/` |
-| `tutor_relationship` | `required, string, max:50` |
+| `tutor_phone` | `required_with:tutor_first_name, string, regex:/^\d{10}$/` |
+| `tutor_relationship` | `required_with:tutor_first_name, string, max:50` |
 
-Flujo: valida `group_id` y `email` único (409 `USR04`) → crea usuario vía Gobernanza (rol `alumno`) → crea `User` local con contraseña aleatoria (el login real pasa por Gobernanza) → crea el `Tutor` familiar y lo vincula (`is_primary: true`, `receives_notifications: true`) → si Gobernanza retorna `temporary_password`, se adjunta en la respuesta **solo de `store`** y se intenta enviar por correo (no bloqueante).
+Flujo: valida `group_id` y `email` único (409 `USR04`) → crea usuario vía Gobernanza (rol `alumno`) → crea `User` local con contraseña aleatoria (el login real pasa por Gobernanza) → si se mandaron los campos `tutor_*`, crea el `Tutor` familiar y lo vincula (`is_primary: true`, `receives_notifications: true`); si no, el alumno queda sin tutor (se puede agregar después vía `POST /students/{student}/tutors`) → si Gobernanza retorna `temporary_password`, se adjunta en la respuesta **solo de `store`** y se intenta enviar por correo (no bloqueante).
 
 Respuesta `AdminStudentResource`: `id, first_name, second_name, first_surname, second_surname, email, phone, birth_date, gender, active, photo_url, group_id, tutors[]` (`{id, full_name, phone, relationship, is_primary, receives_notifications}`), `temporary_password` (solo en `store`).
 
@@ -782,6 +782,28 @@ Asigna/reemplaza el `nfc_uid` personalizado de **cualquier usuario** (alumno, pr
 - `GET /nfc-cards` — Query: `search` (nombre/apellido/email), `role_id`, `has_card` (`true`/`false`), `active`. `AdminNfcCardResource`: `{id, full_name, email, role, active, nfc_uid}` (`nfc_uid` es `null` si el usuario no tiene fila en `user_details` o la tiene sin tarjeta asignada).
 - `PATCH /nfc-cards/{user}` — Body: `nfc_uid* (required, string, regex:/^[A-Za-z0-9:\- ]{1,100}$/, mismo patrón que `/device/nfc`)`. Si el usuario no tiene fila en `user_details` todavía (la mayoría no la tiene — hoy solo la crea el seeder de demo), se crea aquí mismo con un `qr_uuid` generado (`Str::uuid()`), ya que la columna es `NOT NULL`/`unique` y no es responsabilidad de esta pantalla. **409 `NFC01`** si ese `nfc_uid` ya está asignado a otro usuario (validado a nivel de aplicación — la columna `nfc_uid` en BD **no** tiene constraint `unique` intencionalmente, ver comentario "TEMPORAL" en la migración de `user_details`, así que la duplicidad solo se previene aquí). 404 `USR01` si el usuario no existe.
 - `DELETE /nfc-cards/{user}` — quita la tarjeta (`nfc_uid = null`) **sin borrar la fila** de `user_details` (conserva el `qr_uuid`). 404 `USR01`.
+
+### 8.12 Users — creación genérica por rol — `/administrador/users`
+
+Punto de entrada único para dar de alta **cualquier** rol (`alumno`, `profesor`, `tutor_academico`, `director_carrera`, `administrador`) en una sola llamada — antes de esto, `director_carrera`/`administrador` no tenían ningún flujo de creación desde el panel (eran cuentas solo-seed). Los permisos del usuario creado los define su rol (ver `PermissionSeeder`), no hay override por-usuario en este flujo.
+
+`POST /users` — body:
+
+| Campo | Regla |
+|---|---|
+| `role*` | `in:alumno,profesor,tutor_academico,director_carrera,administrador` |
+| `first_name*`, `first_surname*`, `second_surname*` | igual que Students/Teachers |
+| `second_name`, `photo` | opcionales |
+| `email*`, `phone*` (10 dígitos), `birth_date*`, `gender*` (`M,F,OTRO`) | igual que Students/Teachers |
+| `group_id` | `required_if:role,alumno` — ignorado para los demás roles |
+| `nfc_uid` | opcional; **solo se aplica si `role` es `alumno`/`profesor`/`tutor_academico`** (se ignora silenciosamente para `director_carrera`/`administrador`) — misma regex y mismo `NFC01` de duplicado que sección 8.11 (reusa `AssignsNfcUid`, el mismo trait que usa `NfcCardController`) |
+| `tutors` | array opcional, **solo alumno** — cada item: `first_name*, second_name, first_surname*, second_surname*, phone*, relationship*, is_primary` (bool, default false). El primer elemento del array queda como tutor principal (`is_primary: true` fijo, sin importar lo que mande ese item); si el array viene vacío u omitido, el alumno se crea **sin tutor** (antes era obligatorio uno) |
+
+Internamente delega en `CreateStudentService`/`CreateTeacherService` (mismos servicios que usan `POST /students` y `POST /teachers`, sin cambios de comportamiento ahí salvo que el tutor ahora es opcional) para esos tres roles, y en el nuevo `CreateStaffUserService` para `director_carrera`/`administrador` (sin grupo, sin tutor, sin NFC, mismo flujo de Gobernanza + correo de bienvenida).
+
+Respuesta 201 — la forma depende del rol creado: `AdminStudentResource` (alumno), `AdminTeacherResource` (profesor/tutor_academico), o `AdminStaffUserResource` `{id, full_name, email, phone, role, active, photo_url, temporary_password}` (director_carrera/administrador).
+
+Errores: `USR04` (409, email duplicado, cualquier rol), `GRP02` (404, grupo inexistente, solo alumno), `NFC01` (409, UID duplicado), `VAL01` (422).
 
 ---
 
