@@ -3,22 +3,18 @@
 use App\Models\Attendance;
 use App\Models\ClassSession;
 use App\Models\User;
+use Illuminate\Support\Facades\Route;
 
-describe('dev routes', function () {
+test('dev routes do not exist outside local (this suite runs as testing)', function () {
+    $this->getJson('/api/v1/dev/schedules/1/status')->assertNotFound();
+});
 
-    test('echoes the received request without authentication', function () {
-        $response = $this->withHeaders(['X-Debug-Request' => 'true'])
-            ->postJson('/api/v1/dev/echo?source=postman', [
-                'event' => 'nfc_test',
-                'nfc_uid' => '04AABBCC',
-            ]);
-
-        $response->assertOk()
-            ->assertJsonPath('data.method', 'POST')
-            ->assertJsonPath('data.query.source', 'postman')
-            ->assertJsonPath('data.payload.event', 'nfc_test')
-            ->assertJsonPath('data.payload.nfc_uid', '04AABBCC')
-            ->assertJsonMissingPath('data.payload.source');
+describe('with dev routes mounted (simulates APP_ENV=local)', function () {
+    beforeEach(function () {
+        // routes/api.php normalmente se registra con prefix('api')+middleware('api') vía
+        // withRouting(api: ...) en bootstrap/app.php — se replica aquí para que las URLs
+        // coincidan con /api/v1/dev/* tal como las pegaría un cliente real.
+        Route::prefix('api/v1')->middleware('api')->group(base_path('routes/api/dev.php'));
     });
 
     test('activates a schedule as currently in session and returns its device', function () {

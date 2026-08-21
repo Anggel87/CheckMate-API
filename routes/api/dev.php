@@ -8,19 +8,16 @@ use Illuminate\Support\Facades\Route;
 | Rutas de desarrollador
 |--------------------------------------------------------------------------
 |
-| El endpoint echo está disponible en cualquier entorno para inspeccionar peticiones
-| de la API. Las demás herramientas, que modifican sesiones y horarios, solo se
-| cargan en local/testing. Ninguna de estas rutas usa autenticación.
+| Solo se cargan cuando APP_ENV=local (ver routes/api.php) — sirven para probar y
+| demostrar el flujo de asistencia sin esperar a que el reloj real coincida con un
+| horario. Sin middleware de autenticación, mismo criterio que POST /device/nfc: son
+| una herramienta de prototipo, no un endpoint de producción.
 |
 */
 
 Route::prefix('dev')->group(function () {
-    Route::any('echo', [DevToolsController::class, 'echoRequest']);
-
-    if (app()->environment(['local', 'testing'])) {
-        Route::post('schedules/{schedule}/activate-now', [DevToolsController::class, 'activateScheduleNow']);
-        Route::post('schedules/{schedule}/reset-session', [DevToolsController::class, 'resetSession']);
-        Route::get('schedules/{schedule}/status', [DevToolsController::class, 'scheduleStatus']);
-        Route::post('class-sessions/{class_session}/close-now', [DevToolsController::class, 'closeSessionNow']);
-    }
+    Route::post('schedules/{schedule}/activate-now', [DevToolsController::class, 'activateScheduleNow']);
+    Route::post('schedules/{schedule}/reset-session', [DevToolsController::class, 'resetSession']);
+    Route::get('schedules/{schedule}/status', [DevToolsController::class, 'scheduleStatus']);
+    Route::post('class-sessions/{class_session}/close-now', [DevToolsController::class, 'closeSessionNow']);
 });

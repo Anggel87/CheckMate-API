@@ -22,5 +22,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/administrador.php';
     require __DIR__.'/api/director.php';
 
-    require __DIR__.'/api/dev.php';
+    if (app()->environment('local')) {
+        require __DIR__.'/api/dev.php';
+    }
 });
