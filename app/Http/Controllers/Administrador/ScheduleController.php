@@ -100,7 +100,7 @@ class ScheduleController extends Controller
         $this->assertNoConflicts($merged, excludeId: $model->id);
 
         try {
-            $model->update($data);
+            $model->update($merged);
         } catch (QueryException) {
             throw ApiException::conflict('Ya existe ese horario exacto para el grupo, materia y profesor indicados.', 'SCH02');
         }

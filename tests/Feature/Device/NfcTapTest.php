@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\ClassSession;
 use App\Models\Device;
 use App\Models\Tutor;
@@ -84,6 +85,76 @@ test('registers a late attendance for a student tap beyond tolerance and notifie
         'tutor_id' => $tutor->id,
         'type' => 'RETARDO',
     ]);
+});
+
+test('rejects a student tap beyond the default late tolerance as no longer valid', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule, 'device' => $device] = makeScheduleCurrentlyInSession();
+    UserDetail::create(['user_id' => $teacher->id, 'nfc_uid' => 'AA:00:00:01', 'qr_uuid' => (string) Str::uuid()]);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'BB:00:00:02', 'qr_uuid' => (string) Str::uuid()]);
+
+    $this->postJson('/api/v1/device/nfc', ['mac_address' => $device->mac_address, 'nfc_uid' => 'AA:00:00:01']);
+    $session = ClassSession::where('schedule_id', $schedule->id)->firstOrFail();
+
+    $response = $this->postJson('/api/v1/device/nfc', [
+        'mac_address' => $device->mac_address,
+        'nfc_uid' => 'BB:00:00:02',
+        'scanned_at' => $session->opened_at->copy()->addMinutes(35)->format('Y-m-d\TH:i:s'),
+    ]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'ATT05');
+    $this->assertDatabaseMissing('attendances', ['student_id' => $student->id]);
+});
+
+test('honors a custom attendance setting tolerance for the schedule', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule, 'device' => $device] = makeScheduleCurrentlyInSession();
+    UserDetail::create(['user_id' => $teacher->id, 'nfc_uid' => 'AA:00:00:01', 'qr_uuid' => (string) Str::uuid()]);
+    AttendanceSetting::create([
+        'schedule_id' => $schedule->id,
+        'present_tolerance_minutes' => 3,
+        'late_tolerance_minutes' => 10,
+        'is_active' => true,
+    ]);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'BB:00:00:02', 'qr_uuid' => (string) Str::uuid()]);
+
+    $this->postJson('/api/v1/device/nfc', ['mac_address' => $device->mac_address, 'nfc_uid' => 'AA:00:00:01']);
+    $session = ClassSession::where('schedule_id', $schedule->id)->firstOrFail();
+
+    $response = $this->postJson('/api/v1/device/nfc', [
+        'mac_address' => $device->mac_address,
+        'nfc_uid' => 'BB:00:00:02',
+        'scanned_at' => $session->opened_at->copy()->addMinutes(12)->format('Y-m-d\TH:i:s'),
+    ]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'ATT05');
+});
+
+test('ignores a deactivated custom attendance setting and falls back to the default tolerance', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule, 'device' => $device] = makeScheduleCurrentlyInSession();
+    UserDetail::create(['user_id' => $teacher->id, 'nfc_uid' => 'AA:00:00:01', 'qr_uuid' => (string) Str::uuid()]);
+    AttendanceSetting::create([
+        'schedule_id' => $schedule->id,
+        'present_tolerance_minutes' => 3,
+        'late_tolerance_minutes' => 10,
+        'is_active' => false,
+    ]);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'BB:00:00:02', 'qr_uuid' => (string) Str::uuid()]);
+
+    $this->postJson('/api/v1/device/nfc', ['mac_address' => $device->mac_address, 'nfc_uid' => 'AA:00:00:01']);
+    $session = ClassSession::where('schedule_id', $schedule->id)->firstOrFail();
+
+    $response = $this->postJson('/api/v1/device/nfc', [
+        'mac_address' => $device->mac_address,
+        'nfc_uid' => 'BB:00:00:02',
+        'scanned_at' => $session->opened_at->copy()->addMinutes(12)->format('Y-m-d\TH:i:s'),
+    ]);
+
+    $response->assertCreated()->assertJsonPath('data.status', 'RETARDO');
 });
 
 test('rejects an unrecognized nfc card', function () {

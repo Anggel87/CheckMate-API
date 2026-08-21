@@ -7,15 +7,14 @@ use App\Models\Attendance;
 use App\Models\Career;
 use App\Models\Claim;
 use App\Models\ClassSession;
+use App\Models\Classroom;
 use App\Models\Device;
 use App\Models\Group;
-use App\Models\Incident;
 use App\Models\Justification;
 use App\Models\Schedule;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DemoAccountEnrichmentSeeder extends Seeder
@@ -61,26 +60,23 @@ class DemoAccountEnrichmentSeeder extends Seeder
         $this->linkStudentToGroup($alumno, $group->id);
         $this->linkAcademicTutorToGroup($tutorAcademico, $group->id);
 
-        $demoScheduleId = Schedule::query()
-            ->where('group_id', $group->id)
-            ->where('teacher_id', User::where('email', 'teacher@checkmate.test')->value('id'))
-            ->orderBy('id')
-            ->value('id');
-
         $scheduleIds = Schedule::query()
             ->where('group_id', $group->id)
             ->where('is_active', true)
-            ->when($demoScheduleId !== null, fn ($query) => $query->where('id', '!=', $demoScheduleId))
             ->orderBy('id')
             ->take(5)
             ->pluck('id')
             ->all();
 
-        if ($scheduleIds === [] && $demoScheduleId !== null) {
-            $scheduleIds = [$demoScheduleId];
-        }
+        // Ancla estas clases al aula donde ya vive el dispositivo NFC de demo
+        // (ver DeviceSeeder) para que el flujo fisico de check-in siempre tenga
+        // un horario real de profesor@checkmate.com que abrir.
+        $demoClassroom = Classroom::where('name', 'Aula 101')->first() ?? Classroom::first();
 
-        Schedule::whereIn('id', $scheduleIds)->update(['teacher_id' => $profesor->id]);
+        Schedule::whereIn('id', $scheduleIds)->update([
+            'teacher_id' => $profesor->id,
+            'classroom_id' => $demoClassroom->id,
+        ]);
 
         $statusesByScheduleId = collect($scheduleIds)
             ->mapWithKeys(fn (int $scheduleId, int $index) => [
@@ -127,7 +123,6 @@ class DemoAccountEnrichmentSeeder extends Seeder
         }
 
         $this->createJustificationAndClaim($alumno, $director, $absencesForAlumno);
-        $this->createIncident($profesor, $scheduleIds, $students, $alumno);
         $this->seedTutorAcademicoAttendance($tutorAcademico);
     }
 
@@ -277,44 +272,5 @@ class DemoAccountEnrichmentSeeder extends Seeder
                 'status' => 'PENDIENTE',
             ],
         );
-    }
-
-    /**
-     * @param  array<int, int>  $scheduleIds
-     * @param  Collection<int, User>  $students
-     */
-    private function createIncident(User $profesor, array $scheduleIds, $students, User $alumno): void
-    {
-        $scheduleId = $scheduleIds[array_key_last($scheduleIds)];
-
-        if (Incident::where('schedule_id', $scheduleId)->where('reported_by_user_id', $profesor->id)->exists()) {
-            return;
-        }
-
-        $incident = Incident::factory()->create([
-            'reported_by_user_id' => $profesor->id,
-            'reviewed_by_user_id' => $profesor->id,
-            'schedule_id' => $scheduleId,
-            'title' => 'Simulacro de evacuacion',
-            'status' => 'RESUELTO',
-            'type' => 'OTHER',
-        ]);
-
-        $roster = $students->take(3);
-
-        if (! $roster->contains('id', $alumno->id)) {
-            $roster->push($alumno);
-        }
-
-        $statuses = ['SEGURO', 'SEGURO', 'PRESENTE'];
-
-        foreach ($roster->values() as $index => $student) {
-            $incident->students()->attach($student->id, [
-                'status' => $statuses[$index] ?? 'SEGURO',
-                'checked_by_user_id' => $profesor->id,
-                'checked_at' => now(),
-                'notes' => null,
-            ]);
-        }
     }
 }

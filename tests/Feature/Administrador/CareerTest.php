@@ -16,6 +16,17 @@ test('lists only active careers by default', function () {
     expect($response->json('data'))->toHaveCount(1);
 });
 
+test('includes the director on the list, not just on show', function () {
+    $director = User::factory()->careerDirector()->create();
+    Career::factory()->create(['director_id' => $director->id]);
+
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    $response = $this->getJson('/api/v1/administrador/careers', ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.0.director.id', $director->id);
+});
+
 test('creates a career with a valid director', function () {
     $director = User::factory()->careerDirector()->create();
     $token = fakeGovernanceAuth(makeAdmin());

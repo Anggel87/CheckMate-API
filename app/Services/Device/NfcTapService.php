@@ -5,6 +5,7 @@ namespace App\Services\Device;
 use App\Events\AttendanceRegistered;
 use App\Exceptions\ApiException;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\ClassSession;
 use App\Models\Device;
 use App\Models\Schedule;
@@ -127,9 +128,20 @@ class NfcTapService
 
     private function resolveStatus(ClassSession $session, Carbon $scannedAt): string
     {
-        $presentTolerance = $session->schedule->settings?->present_tolerance_minutes ?? 10;
+        $settings = $session->schedule->settings;
+        $isCustom = $settings !== null && $settings->is_active;
+
+        $presentTolerance = $isCustom ? $settings->present_tolerance_minutes : AttendanceSetting::DEFAULT_PRESENT_TOLERANCE_MINUTES;
+        $lateTolerance = $isCustom ? $settings->late_tolerance_minutes : AttendanceSetting::DEFAULT_LATE_TOLERANCE_MINUTES;
 
         $diffMinutes = ($scannedAt->getTimestamp() - $session->opened_at->getTimestamp()) / 60;
+
+        if ($diffMinutes > $lateTolerance) {
+            throw ApiException::conflict(
+                'Ya pasó el tiempo límite de tolerancia para esta clase; el registro ya no es válido.',
+                'ATT05'
+            );
+        }
 
         return $diffMinutes <= $presentTolerance ? 'PRESENTE' : 'RETARDO';
     }

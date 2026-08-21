@@ -283,6 +283,7 @@ Tabla consolidada de **todos** los códigos de error del sistema (útil para map
 | `ATT02` | 403 | El alumno no pertenece al grupo de esa clase |
 | `ATT03` | 409 **o** 404 | Sin asistencias en la materia (409, al crear un claim) **/** la asistencia indicada no existe o no es de esa materia (404, al justificar) — ⚠️ mismo código, dos HTTP distintos según endpoint |
 | `ATT04` | 409 | La asistencia no está en estado `FALTA` (no se puede justificar) |
+| `ATT05` | 409 | El tap llegó después de la tolerancia de retardo configurada para el horario; el registro ya no es válido (Device NFC y Profesor NFC manual) |
 
 ### Incidentes (Director, Profesor)
 
@@ -424,7 +425,7 @@ Endpoint **público** (sin `governance.auth` ni `role:`), llamado directamente p
 - Si el alumno no pertenece al grupo del horario: **403 `ATT02`**.
 - Si no hay sesión `ABIERTA` para ese horario hoy (el profesor no ha abierto su sesión primero): **404 `SES02`**.
 - Si el alumno ya registró asistencia en esa sesión: **409 `ATT01`**.
-- **Cálculo de tolerancia**: compara `scanned_at` (o `now()`) contra `session.opened_at`. Tolerancia = `schedule.settings.present_tolerance_minutes` (default **10 min** si no hay `AttendanceSetting`). Si la diferencia ≤ tolerancia → `PRESENTE`; si no → `RETARDO`. (`FALTA` **nunca** se calcula aquí — solo al cerrar la sesión, ver sección 10).
+- **Cálculo de tolerancia**: compara `scanned_at` (o `now()`) contra `session.opened_at`. Tolerancias = `schedule.settings.present_tolerance_minutes`/`late_tolerance_minutes` (default **10/30 min** si no hay `AttendanceSetting` **o** si la que existe tiene `is_active: false`). Si la diferencia ≤ `present_tolerance_minutes` → `PRESENTE`; si es ≤ `late_tolerance_minutes` → `RETARDO`; si la supera → **409 `ATT05`**, el tap se rechaza y no crea ningún registro (`FALTA` **nunca** se calcula aquí — solo al cerrar la sesión, ver sección 10).
 - **201:**
 ```json
 { "data": { "event": "attendance_registered", "student_id": 10, "full_name": "Ana Pérez López", "status": "PRESENTE", "checked_in_at": "2026-08-10T08:02:00+00:00" } }
@@ -968,9 +969,23 @@ Todos paginados (20). `AuditLogResource`: `{ id, entity, entity_id, action (CREA
 
 `POST /sessions/open` — body: `schedule_id* (integer, min:1, exists:schedules,id)`, `date* (date_format:Y-m-d)`. 403 `PERM01` si el horario no es del profesor. 409 `SES01` si ya existe sesión para ese horario+fecha (en cualquier estado). 404 `DEV01` si el salón no tiene dispositivo activo. Respuesta 201 `ClassSessionResource`: `{session_id, schedule_id, date, status, opened_at}`.
 
-`POST /sessions/{session}/nfc` — registro manual del profesor (lee/teclea el UID). Body: `nfc_uid* (regex igual a /device/nfc)`, `scanned_at* (required, date_format:Y-m-d\TH:i:s)`. 403 `PERM01`, 404 `SES02` (sesión no abierta), 404 `USR02` (UID no reconocido), 403 `ATT02` (grupo incorrecto), 409 `ATT01` (duplicado).
+`POST /sessions/{session}/nfc` — registro manual del profesor (lee/teclea el UID). Body: `nfc_uid* (regex igual a /device/nfc)`, `scanned_at* (required, date_format:Y-m-d\TH:i:s)`. 403 `PERM01`, 404 `SES02` (sesión no abierta), 404 `USR02` (UID no reconocido), 403 `ATT02` (grupo incorrecto), 409 `ATT01` (duplicado), **409 `ATT05`** (fuera de la tolerancia de retardo del horario — ver 10.3.1).
 
-⚠️ **Diferencia clave de tolerancia vs. `/device/nfc`**: aquí la tolerancia PRESENTE/RETARDO se calcula contra `schedule.start_time` (hora **programada** de la clase), mientras que en el tap directo del dispositivo se calcula contra `session.opened_at` (hora **real** de apertura) — pueden dar resultados distintos si la sesión se abrió tarde.
+⚠️ **Diferencia clave de tolerancia vs. `/device/nfc`**: aquí la tolerancia PRESENTE/RETARDO/rechazo se calcula contra `schedule.start_time` (hora **programada** de la clase), mientras que en el tap directo del dispositivo se calcula contra `session.opened_at` (hora **real** de apertura) — pueden dar resultados distintos si la sesión se abrió tarde.
+
+### 10.3.1 Attendance Setting por horario (autoservicio del profesor)
+
+El profesor/tutor académico puede ajustar la tolerancia de PRESENTE/RETARDO de cada horario **propio** sin pasar por Administrador. Reusa la misma tabla `attendance_settings` (una fila por `schedule_id`) y el mismo `AdminAttendanceSettingResource` de la sección 8.10 — solo cambia la autorización: aquí se valida por `schedule.teacher_id === auth()->id()` (403 `PERM01` si el horario no es del profesor), no por rol de Administrador.
+
+| Método | Path | Notas |
+|---|---|---|
+| GET | `/schedule/{schedule}/attendance-setting` | Si no existe fila custom (o nunca se creó), devuelve los valores por defecto (`present: 10`, `late: 30`) con `id: null` — no es un 404 |
+| PUT | `/schedule/{schedule}/attendance-setting` | Upsert: crea si no existe, actualiza si ya existe. Body: `present_tolerance_minutes* (integer, min:0, max:255)`, `late_tolerance_minutes* (integer, min:0, max:255, gt:present_tolerance_minutes)` — ambos **siempre requeridos** (a diferencia del `PUT` de Administrador, que los acepta `sometimes`) |
+| DELETE | `/schedule/{schedule}/attendance-setting` | Restablece a los valores por defecto (baja lógica `is_active: false` de la fila custom, **sin** `confirm=true`) |
+
+404 `SCH01` si el horario no existe. 422 `VAL01` si `late_tolerance_minutes` no es mayor a `present_tolerance_minutes`.
+
+Estas mismas tolerancias son las que usan `POST /device/nfc` (sección 7) y `POST /sessions/{session}/nfc` (arriba) para decidir PRESENTE/RETARDO/rechazo — un `AttendanceSetting` con `is_active: false` se ignora por completo y cae a los valores por defecto.
 
 `PATCH /sessions/{session}/students/{student}` — edición manual de un registro. Body: `status* (in:PRESENTE,RETARDO,FALTA)`. ⚠️ No valida que la sesión siga abierta ni que `{student}` exista/pertenezca al grupo — sobreescribe `registered_at` a "ahora" y cambia `method` a `MANUAL` aunque el registro previo fuera `NFC`.
 
@@ -1164,7 +1179,7 @@ Sin body. Cierra la sesión inmediatamente reutilizando `CloseClassSessionServic
 4. **Endpoints con route-model-binding implícito** (`Alumno\ClaimController@show`, `JustificationController@show`, `SubjectController@show/attendance`) dan 404 en formato de Laravel puro si el ID no existe, distinto al resto de la API.
 5. **`ATT03` tiene dos HTTP status distintos** según el endpoint (409 en creación de claim, 404 en creación de justificante).
 6. **`INC02` (Profesor) vs. `INC03` (Director)** significan lo mismo ("incidente ya cerrado") con código distinto según el módulo que lo lanza.
-7. **Tolerancia PRESENTE/RETARDO tiene dos referencias horarias distintas** según el canal: `session.opened_at` en el tap directo del dispositivo (`/device/nfc`), vs. `schedule.start_time` en el registro manual del profesor (`/profesor/sessions/{id}/nfc`). **`FALTA` nunca se calcula en el momento del tap** — solo al cerrar la sesión (manual o cron cada 5 min).
+7. **Tolerancia PRESENTE/RETARDO/rechazo tiene dos referencias horarias distintas** según el canal: `session.opened_at` en el tap directo del dispositivo (`/device/nfc`), vs. `schedule.start_time` en el registro manual del profesor (`/profesor/sessions/{id}/nfc`). Un tap que llega después de `late_tolerance_minutes` se rechaza con **409 `ATT05`** y no crea ningún registro. **`FALTA` nunca se calcula en el momento del tap** — solo al cerrar la sesión (manual o cron cada 5 min).
 8. **`claims.tutor_id` guarda al alumno reclamante**, no a un tutor familiar. El módulo `/tutor/*` es en realidad para el **tutor académico** (profesor), no el tutor familiar (que no tiene login).
 9. **Los reclamos (`claims`) nunca modifican `attendance.status`**, ni siquiera al ser `ACEPTADO`. Solo los **justificantes** aprobados por el tutor académico cambian la asistencia a `JUSTIFICADA`.
 10. **`IncidentDetailResource.students[].present`** colapsa `AUSENTE` y `DESCONOCIDO` en `false` — no se puede distinguir "aún sin revisar" de "confirmado ausente" sin el detalle del pivot.

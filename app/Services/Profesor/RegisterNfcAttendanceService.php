@@ -5,6 +5,7 @@ namespace App\Services\Profesor;
 use App\Events\AttendanceRegistered;
 use App\Exceptions\ApiException;
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\ClassSession;
 use App\Models\User;
 use App\Models\UserDetail;
@@ -67,10 +68,21 @@ class RegisterNfcAttendanceService
 
     private function resolveStatus(ClassSession $session, Carbon $scannedAt): string
     {
-        $presentTolerance = $session->schedule->settings?->present_tolerance_minutes ?? 10;
+        $settings = $session->schedule->settings;
+        $isCustom = $settings !== null && $settings->is_active;
+
+        $presentTolerance = $isCustom ? $settings->present_tolerance_minutes : AttendanceSetting::DEFAULT_PRESENT_TOLERANCE_MINUTES;
+        $lateTolerance = $isCustom ? $settings->late_tolerance_minutes : AttendanceSetting::DEFAULT_LATE_TOLERANCE_MINUTES;
 
         $scheduleStart = Carbon::parse($session->date->format('Y-m-d').' '.$session->schedule->start_time);
         $diffMinutes = ($scannedAt->getTimestamp() - $scheduleStart->getTimestamp()) / 60;
+
+        if ($diffMinutes > $lateTolerance) {
+            throw ApiException::conflict(
+                'Ya pasó el tiempo límite de tolerancia para esta clase; el registro ya no es válido.',
+                'ATT05'
+            );
+        }
 
         return $diffMinutes <= $presentTolerance ? 'PRESENTE' : 'RETARDO';
     }

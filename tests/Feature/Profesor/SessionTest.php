@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\AttendanceSetting;
 use App\Models\ClassSession;
 use App\Models\Device;
 use App\Models\User;
@@ -86,6 +87,49 @@ test('registers a late attendance via nfc beyond the present tolerance', functio
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated()->assertJsonPath('data.status', 'RETARDO');
+});
+
+test('rejects an nfc scan beyond the late tolerance as no longer valid', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $schedule->update(['start_time' => '08:00:00', 'end_time' => '09:00:00']);
+    $session = makeOpenClassSession($schedule);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'AA:BB:CC:DD', 'qr_uuid' => (string) Str::uuid()]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson("/api/v1/profesor/sessions/{$session->id}/nfc", [
+        'nfc_uid' => 'AA:BB:CC:DD',
+        'scanned_at' => $session->date->format('Y-m-d').'T08:35:00',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'ATT05');
+    $this->assertDatabaseMissing('attendances', ['student_id' => $student->id]);
+});
+
+test('honors a custom attendance setting tolerance when scanning via nfc', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $schedule->update(['start_time' => '08:00:00', 'end_time' => '09:00:00']);
+    AttendanceSetting::create([
+        'schedule_id' => $schedule->id,
+        'present_tolerance_minutes' => 3,
+        'late_tolerance_minutes' => 10,
+        'is_active' => true,
+    ]);
+    $session = makeOpenClassSession($schedule);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'AA:BB:CC:DD', 'qr_uuid' => (string) Str::uuid()]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson("/api/v1/profesor/sessions/{$session->id}/nfc", [
+        'nfc_uid' => 'AA:BB:CC:DD',
+        'scanned_at' => $session->date->format('Y-m-d').'T08:12:00',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertConflict()->assertJsonPath('error_code', 'ATT05');
 });
 
 test('rejects nfc scan for an unrecognized card', function () {

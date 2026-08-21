@@ -11,7 +11,7 @@ test('seeders wire the demo device and the complete NFC attendance flow', functi
     $this->seed(DatabaseSeeder::class);
 
     $device = Device::where('mac_address', 'DC:A6:32:69:68:11')->firstOrFail();
-    $teacher = User::where('email', 'teacher@checkmate.test')->firstOrFail();
+    $teacher = User::where('email', 'profesor@checkmate.com')->firstOrFail();
     $student = User::where('email', 'alumno@checkmate.com')->firstOrFail();
     $schedule = Schedule::query()
         ->where('teacher_id', $teacher->id)

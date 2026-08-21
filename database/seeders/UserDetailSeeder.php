@@ -20,7 +20,7 @@ class UserDetailSeeder extends Seeder
 
     public function run(): void
     {
-        $fixedTeacher = User::where('email', 'teacher@checkmate.test')->first();
+        $fixedTeacher = User::where('email', 'profesor@checkmate.com')->first();
 
         if ($fixedTeacher !== null) {
             $this->giveNfcUid($fixedTeacher, self::TEACHER_NFC_UID);

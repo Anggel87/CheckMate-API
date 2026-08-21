@@ -10,7 +10,9 @@ class CareerSeeder extends Seeder
 {
     public function run(): void
     {
-        $directors = User::whereHas('role', fn ($query) => $query->where('name', 'director_carrera'))->get();
+        // director_carrera@checkmate.com es el unico director sembrado; queda a cargo
+        // de las 4 carreras hasta que el admin asigne directores reales desde el panel.
+        $director = User::where('email', 'director_carrera@checkmate.com')->firstOrFail();
 
         $careers = [
             [
@@ -39,10 +41,10 @@ class CareerSeeder extends Seeder
             ],
         ];
 
-        foreach ($careers as $index => $career) {
+        foreach ($careers as $career) {
             Career::create([
                 ...$career,
-                'director_id' => $directors[$index % $directors->count()]->id,
+                'director_id' => $director->id,
             ]);
         }
     }

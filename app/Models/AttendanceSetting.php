@@ -18,6 +18,10 @@ class AttendanceSetting extends Model
 {
     use HasFactory;
 
+    public const DEFAULT_PRESENT_TOLERANCE_MINUTES = 10;
+
+    public const DEFAULT_LATE_TOLERANCE_MINUTES = 30;
+
     protected $fillable = [
         'schedule_id',
         'present_tolerance_minutes',

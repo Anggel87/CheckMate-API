@@ -22,6 +22,7 @@ class CareerController extends Controller
     {
         $careers = Career::query()
             ->withCount('groups')
+            ->with('director')
             ->when(! $request->boolean('include_inactive'), fn ($query) => $query->where('is_active', true))
             ->get();
 

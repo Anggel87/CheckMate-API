@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Profesor\AttendanceSettingController;
 use App\Http\Controllers\Profesor\ClaimController;
 use App\Http\Controllers\Profesor\GroupController;
 use App\Http\Controllers\Profesor\IncidentController;
@@ -31,6 +32,10 @@ Route::prefix('profesor')
         Route::get('/schedule/{schedule}/session', [ScheduleController::class, 'sessionState'])->name('schedule.session');
         Route::get('/schedule/{schedule}/stream', [ScheduleController::class, 'stream'])->name('schedule.stream');
         Route::get('/schedule', [ScheduleController::class, 'week'])->name('schedule.week');
+
+        Route::get('/schedule/{schedule}/attendance-setting', [AttendanceSettingController::class, 'show'])->name('schedule.attendance-setting');
+        Route::put('/schedule/{schedule}/attendance-setting', [AttendanceSettingController::class, 'update'])->name('schedule.attendance-setting.update');
+        Route::delete('/schedule/{schedule}/attendance-setting', [AttendanceSettingController::class, 'destroy'])->name('schedule.attendance-setting.destroy');
 
         Route::post('/sessions/open', [SessionController::class, 'open'])->name('sessions.open');
         Route::post('/sessions/{session}/nfc', [SessionController::class, 'nfc'])->name('sessions.nfc');
