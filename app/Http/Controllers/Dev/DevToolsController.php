@@ -14,13 +14,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 /**
- * Herramientas de desarrollador para probar/demostrar el flujo de asistencia sin
- * esperar a que el reloj real coincida con un horario. Solo se registran en
- * routes/api/dev.php cuando APP_ENV=local (ver routes/api.php).
+ * Herramientas de desarrollador para inspeccionar peticiones y probar/demostrar el
+ * flujo de asistencia sin esperar a que el reloj real coincida con un horario.
  */
 class DevToolsController extends Controller
 {
     use ApiResponse;
+
+    public function echoRequest(Request $request): JsonResponse
+    {
+        $payload = $request->isJson()
+            ? $request->json()->all()
+            : $request->request->all();
+
+        return $this->successResponse('Petición recibida correctamente.', [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'query' => $request->query(),
+            'payload' => $payload,
+            'headers' => $request->headers->all(),
+        ]);
+    }
 
     public function activateScheduleNow(Request $request, int $schedule): JsonResponse
     {
