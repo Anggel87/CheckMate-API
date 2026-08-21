@@ -670,7 +670,7 @@ Respuesta `AdminStudentResource`: `id, first_name, second_name, first_surname, s
 | `photo` | `sometimes, nullable, file` |
 | `is_academic_tutor` | `sometimes, boolean` |
 
-Respuesta `AdminTeacherResource`: `id, first_name, second_name, first_surname, second_surname, email, phone, birth_date, gender, active, photo_url, is_academic_tutor, schedules_count, tutored_groups[], temporary_password (solo store)`.
+Respuesta `AdminTeacherResource`: `id, full_name, first_name, second_name, first_surname, second_surname, email, phone, birth_date, gender, active, photo_url, is_academic_tutor, schedules_count, tutored_groups[], temporary_password (solo store)`.
 
 **`PATCH /teachers/{teacher}/academic-tutor`:**
 

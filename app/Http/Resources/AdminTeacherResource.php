@@ -16,6 +16,7 @@ class AdminTeacherResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'full_name' => $this->fullName(),
             'first_name' => $this->first_name,
             'second_name' => $this->second_name,
             'first_surname' => $this->first_surname,
