@@ -207,6 +207,36 @@ test('rejects a duplicate student tap in the same session', function () {
     $response->assertConflict()->assertJsonPath('error_code', 'ATT01');
 });
 
+test('allows a student tap to overwrite a manual falta from the teacher', function () {
+    ['group' => $group, 'schedule' => $schedule, 'device' => $device] = makeScheduleCurrentlyInSession();
+    $session = makeOpenClassSession($schedule);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'BB:00:00:02', 'qr_uuid' => (string) Str::uuid()]);
+
+    Attendance::factory()->absent()->create([
+        'class_session_id' => $session->id,
+        'student_id' => $student->id,
+        'schedule_id' => $schedule->id,
+        'devices_id' => $session->device_id,
+    ]);
+
+    $response = $this->postJson('/api/v1/device/nfc', [
+        'mac_address' => $device->mac_address,
+        'nfc_uid' => 'BB:00:00:02',
+        'scanned_at' => $session->opened_at->copy()->addMinutes(5)->format('Y-m-d\TH:i:s'),
+    ]);
+
+    $response->assertCreated()->assertJsonPath('data.status', 'PRESENTE');
+    $this->assertDatabaseHas('attendances', [
+        'class_session_id' => $session->id,
+        'student_id' => $student->id,
+        'status' => 'PRESENTE',
+        'method' => 'NFC',
+    ]);
+    $this->assertDatabaseCount('attendances', 1);
+});
+
 test('rejects a student tap before the teacher has opened the session', function () {
     ['group' => $group, 'device' => $device] = makeScheduleCurrentlyInSession();
 

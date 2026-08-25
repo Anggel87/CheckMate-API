@@ -188,6 +188,38 @@ test('rejects a duplicate nfc scan in the same session', function () {
     $response->assertConflict()->assertJsonPath('error_code', 'ATT01');
 });
 
+test('allows an nfc scan to overwrite a manual falta from the teacher', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $schedule->update(['start_time' => '08:00:00', 'end_time' => '09:00:00']);
+    $session = makeOpenClassSession($schedule);
+
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    UserDetail::create(['user_id' => $student->id, 'nfc_uid' => 'AA:BB:CC:DD', 'qr_uuid' => (string) Str::uuid()]);
+
+    Attendance::factory()->absent()->create([
+        'class_session_id' => $session->id,
+        'student_id' => $student->id,
+        'schedule_id' => $schedule->id,
+        'devices_id' => $session->device_id,
+    ]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson("/api/v1/profesor/sessions/{$session->id}/nfc", [
+        'nfc_uid' => 'AA:BB:CC:DD',
+        'scanned_at' => $session->date->format('Y-m-d').'T08:05:00',
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated()->assertJsonPath('data.status', 'PRESENTE');
+    $this->assertDatabaseHas('attendances', [
+        'class_session_id' => $session->id,
+        'student_id' => $student->id,
+        'status' => 'PRESENTE',
+        'method' => 'NFC',
+    ]);
+    $this->assertDatabaseCount('attendances', 1);
+});
+
 test('manually overrides a student attendance status', function () {
     ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
     $session = makeOpenClassSession($schedule);

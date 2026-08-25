@@ -6,8 +6,8 @@ use App\Models\AcademicTutor;
 use App\Models\Attendance;
 use App\Models\Career;
 use App\Models\Claim;
-use App\Models\ClassSession;
 use App\Models\Classroom;
+use App\Models\ClassSession;
 use App\Models\Device;
 use App\Models\Group;
 use App\Models\Justification;
@@ -60,18 +60,46 @@ class DemoAccountEnrichmentSeeder extends Seeder
         $this->linkStudentToGroup($alumno, $group->id);
         $this->linkAcademicTutorToGroup($tutorAcademico, $group->id);
 
-        $scheduleIds = Schedule::query()
-            ->where('group_id', $group->id)
-            ->where('is_active', true)
-            ->orderBy('id')
-            ->take(5)
-            ->pluck('id')
-            ->all();
-
         // Ancla estas clases al aula donde ya vive el dispositivo NFC de demo
         // (ver DeviceSeeder) para que el flujo fisico de check-in siempre tenga
         // un horario real de profesor@checkmate.com que abrir.
         $demoClassroom = Classroom::where('name', 'Aula 101')->first() ?? Classroom::first();
+
+        // Reasignar sin cuidado empalmaria a profesor@checkmate.com (choca con otro horario
+        // suyo, en otro grupo, a la misma hora) o al aula 101 (choca con otro grupo que ya
+        // usa esa aula a esa hora). Solo se reasignan los horarios del grupo ancla que caen
+        // en un dia/hora donde ambos ya estan libres.
+        $busyTeacherSlots = Schedule::where('teacher_id', $profesor->id)
+            ->where('is_active', true)
+            ->get()
+            ->map(fn (Schedule $schedule) => "{$schedule->day_of_week}|{$schedule->start_time}")
+            ->flip();
+
+        $busyClassroomSlots = Schedule::where('classroom_id', $demoClassroom->id)
+            ->where('is_active', true)
+            ->get()
+            ->map(fn (Schedule $schedule) => "{$schedule->day_of_week}|{$schedule->start_time}")
+            ->flip();
+
+        $scheduleIds = Schedule::query()
+            ->where('group_id', $group->id)
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get()
+            ->filter(function (Schedule $schedule) use ($busyTeacherSlots, $busyClassroomSlots, $profesor, $demoClassroom) {
+                $key = "{$schedule->day_of_week}|{$schedule->start_time}";
+
+                // Cada choque se evalua por separado: un horario que ya es de profesor@checkmate.com
+                // (o que ya vive en el aula 101) no puede chocar consigo mismo en ese lado, pero SI
+                // debe seguir revisando el otro lado, porque ambos campos se sobreescriben juntos.
+                $teacherConflict = $schedule->teacher_id !== $profesor->id && $busyTeacherSlots->has($key);
+                $classroomConflict = $schedule->classroom_id !== $demoClassroom->id && $busyClassroomSlots->has($key);
+
+                return ! $teacherConflict && ! $classroomConflict;
+            })
+            ->take(5)
+            ->pluck('id')
+            ->all();
 
         Schedule::whereIn('id', $scheduleIds)->update([
             'teacher_id' => $profesor->id,

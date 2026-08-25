@@ -33,34 +33,47 @@ class ScheduleSeeder extends Seeder
             ['11:00:00', '12:00:00'],
         ];
 
-        // Solo hay un profesor y un tutor academico sembrados (los @checkmate.com);
-        // sin este control de ocupacion, asignarlos al azar por grupo los dejaria
-        // dando dos clases distintas al mismo tiempo en su propio horario.
-        $busyTeachers = [];
-        $busyClassrooms = [];
+        // Solo hay un profesor y un tutor academico sembrados (los @checkmate.com); el estado de
+        // ocupacion se comparte entre TODOS los grupos de un dia (no por grupo) para que dos
+        // grupos jamas terminen compartiendo profesor o aula a la misma hora. A diferencia de la
+        // version anterior, aqui NUNCA se cae a una asignacion al azar cuando no hay nadie libre:
+        // si no hay profesor/aula disponible para una materia, esa clase simplemente se omite en
+        // vez de generar un horario empalmado.
+        foreach ($days as $day) {
+            $busyTeachers = [];
+            $busyClassrooms = [];
 
-        foreach ($groups as $group) {
-            foreach ($days as $day) {
+            foreach ($groups as $group) {
                 $usedSlots = [];
 
                 foreach ($subjects->random(3) as $subject) {
-                    $availableSlots = array_filter(
-                        $timeSlots,
-                        fn ($slot) => ! in_array($slot[0], $usedSlots)
+                    $availableSlots = collect($timeSlots)->reject(
+                        fn ($slot) => in_array($slot[0], $usedSlots)
                     );
 
-                    if (empty($availableSlots)) {
+                    $slot = null;
+                    $teacher = null;
+                    $classroom = null;
+
+                    foreach ($availableSlots->shuffle() as $candidateSlot) {
+                        $freeTeacher = $this->pickFree($teachers, $busyTeachers, $candidateSlot[0]);
+                        $freeClassroom = $this->pickFree($classrooms, $busyClassrooms, $candidateSlot[0]);
+
+                        if ($freeTeacher !== null && $freeClassroom !== null) {
+                            $slot = $candidateSlot;
+                            $teacher = $freeTeacher;
+                            $classroom = $freeClassroom;
+                            break;
+                        }
+                    }
+
+                    if ($slot === null) {
                         continue;
                     }
 
-                    $slot = collect($availableSlots)->random();
                     $usedSlots[] = $slot[0];
-
-                    $teacher = $this->pickFree($teachers, $busyTeachers, $day, $slot[0]);
-                    $classroom = $this->pickFree($classrooms, $busyClassrooms, $day, $slot[0]);
-
-                    $busyTeachers["{$teacher->id}|{$day}|{$slot[0]}"] = true;
-                    $busyClassrooms["{$classroom->id}|{$day}|{$slot[0]}"] = true;
+                    $busyTeachers["{$teacher->id}|{$slot[0]}"] = true;
+                    $busyClassrooms["{$classroom->id}|{$slot[0]}"] = true;
 
                     Schedule::create([
                         'school_year_id' => $schoolYear->id,
@@ -81,12 +94,11 @@ class ScheduleSeeder extends Seeder
     /**
      * @param  Collection<int, Classroom|User>  $pool
      * @param  array<string, bool>  $busy
-     * @return Classroom|User
      */
-    private function pickFree(Collection $pool, array $busy, string $day, string $slotStart): Classroom|User
+    private function pickFree(Collection $pool, array $busy, string $slotStart): Classroom|User|null
     {
-        $free = $pool->reject(fn ($item) => isset($busy["{$item->id}|{$day}|{$slotStart}"]));
+        $free = $pool->reject(fn ($item) => isset($busy["{$item->id}|{$slotStart}"]));
 
-        return $free->isNotEmpty() ? $free->random() : $pool->random();
+        return $free->isNotEmpty() ? $free->random() : null;
     }
 }

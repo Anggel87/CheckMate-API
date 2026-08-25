@@ -107,22 +107,30 @@ class NfcTapService
                 throw ApiException::notFound('La sesión de clase no existe o ya fue cerrada.', 'SES02');
             }
 
-            if (Attendance::where('class_session_id', $session->id)->where('student_id', $student->id)->exists()) {
+            $existing = Attendance::where('class_session_id', $session->id)
+                ->where('student_id', $student->id)
+                ->first();
+
+            // Una FALTA es una marca manual del profesor por falta de registro, no una asistencia
+            // real: un tap NFC posterior del alumno debe poder sobreescribirla. PRESENTE/RETARDO/
+            // JUSTIFICADA sí son registros firmes y siguen bloqueando un segundo tap.
+            if ($existing !== null && $existing->status !== 'FALTA') {
                 throw ApiException::conflict('Este alumno ya registró su asistencia en esta sesión.', 'ATT01');
             }
 
             $scannedAt = $scannedAtRaw !== null ? Carbon::parse($scannedAtRaw) : $now;
             $status = $this->resolveStatus($session, $scannedAt);
 
-            return Attendance::create([
-                'class_session_id' => $session->id,
-                'student_id' => $student->id,
-                'schedule_id' => $schedule->id,
-                'devices_id' => $device->id,
-                'registered_at' => $scannedAt,
-                'status' => $status,
-                'method' => 'NFC',
-            ]);
+            return Attendance::updateOrCreate(
+                ['class_session_id' => $session->id, 'student_id' => $student->id],
+                [
+                    'schedule_id' => $schedule->id,
+                    'devices_id' => $device->id,
+                    'registered_at' => $scannedAt,
+                    'status' => $status,
+                    'method' => 'NFC',
+                ]
+            );
         });
 
         AttendanceRegistered::dispatch($attendance, $student->id);
