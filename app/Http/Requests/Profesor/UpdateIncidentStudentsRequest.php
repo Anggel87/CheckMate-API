@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Profesor;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateIncidentStudentsRequest extends FormRequest
 {
@@ -19,7 +20,10 @@ class UpdateIncidentStudentsRequest extends FormRequest
         return [
             'students' => ['required', 'array', 'min:1'],
             'students.*.student_id' => ['required', 'integer', 'exists:users,id'],
-            'students.*.present' => ['required', 'boolean'],
+            // El profesor solo puede marcar presente/ausente (pase de lista normal) o a salvo
+            // (por si el alumno no tiene celular para reportarse el mismo). DESCONOCIDO y
+            // EXTRAVIADO quedan reservados para director/administrador.
+            'students.*.status' => ['required', Rule::in(['PRESENTE', 'AUSENTE', 'SEGURO'])],
             'comment' => ['nullable', 'string', 'max:300'],
         ];
     }
@@ -33,7 +37,8 @@ class UpdateIncidentStudentsRequest extends FormRequest
             'students.required' => 'Debes indicar al menos un alumno.',
             'students.*.student_id.required' => 'Debes indicar el alumno.',
             'students.*.student_id.exists' => 'Uno de los alumnos indicados no existe.',
-            'students.*.present.required' => 'Debes indicar si el alumno está presente.',
+            'students.*.status.required' => 'Debes indicar el estatus del alumno.',
+            'students.*.status.in' => 'El estatus indicado no es válido.',
             'comment.max' => 'El comentario no puede superar los 300 caracteres.',
         ];
     }

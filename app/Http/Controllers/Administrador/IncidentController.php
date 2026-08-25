@@ -163,9 +163,16 @@ class IncidentController extends Controller
         $this->assertNotClosed($incidentModel);
 
         $data = $request->validated();
+        $updated = 0;
 
         foreach ($data['students'] as $entry) {
             $previousStatus = $incidentModel->students()->where('users.id', $entry['student_id'])->first()?->pivot->status;
+
+            // Una vez que un alumno queda confirmado a salvo (por si mismo o por
+            // profesor/administrador), no se puede revertir por accidente a otro estatus.
+            if ($previousStatus === 'SEGURO') {
+                continue;
+            }
 
             $incidentModel->students()->syncWithoutDetaching([
                 $entry['student_id'] => [
@@ -175,6 +182,8 @@ class IncidentController extends Controller
                     'checked_at' => now(),
                 ],
             ]);
+
+            $updated++;
 
             if ($previousStatus !== $entry['status']) {
                 $auditLogger->log(
@@ -190,7 +199,7 @@ class IncidentController extends Controller
 
         return $this->successResponse('Lista de emergencia actualizada correctamente.', [
             'incident_id' => $incidentModel->id,
-            'updated_count' => count($data['students']),
+            'updated_count' => $updated,
         ]);
     }
 

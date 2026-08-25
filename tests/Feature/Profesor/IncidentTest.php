@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Incident;
+use App\Models\Tutor;
 use App\Models\User;
 
 test('creates an incident and seeds the emergency checklist for the given groups', function () {
@@ -109,7 +110,7 @@ test('records a history trail as an incident is created, edited and its checklis
     ], ['Authorization' => "Bearer {$token}"]);
 
     $this->patchJson("/api/v1/profesor/incidents/{$incidentId}/students", [
-        'students' => [['student_id' => $student->id, 'present' => true]],
+        'students' => [['student_id' => $student->id, 'status' => 'PRESENTE']],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response = $this->getJson("/api/v1/profesor/incidents/{$incidentId}", ['Authorization' => "Bearer {$token}"]);
@@ -197,11 +198,80 @@ test('updates the emergency checklist marking students present or absent', funct
     $token = fakeGovernanceAuth($teacher);
 
     $response = $this->patchJson("/api/v1/profesor/incidents/{$incident->id}/students", [
-        'students' => [['student_id' => $student->id, 'present' => true]],
+        'students' => [['student_id' => $student->id, 'status' => 'PRESENTE']],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertOk()->assertJsonPath('data.present_count', 1);
     $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'PRESENTE']);
+});
+
+test('the teacher can mark a student safe directly when they have no phone to self-report', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $incident = Incident::factory()->create(['reported_by_user_id' => $teacher->id, 'schedule_id' => $schedule->id]);
+    $incident->students()->attach($student->id, ['status' => 'DESCONOCIDO', 'checked_by_user_id' => $teacher->id, 'checked_at' => now()]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->patchJson("/api/v1/profesor/incidents/{$incident->id}/students", [
+        'students' => [['student_id' => $student->id, 'status' => 'SEGURO']],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.safe_count', 1);
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'SEGURO']);
+});
+
+test('a student already marked safe cannot be reverted to another status', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $student = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $incident = Incident::factory()->create(['reported_by_user_id' => $teacher->id, 'schedule_id' => $schedule->id]);
+    $incident->students()->attach($student->id, ['status' => 'SEGURO', 'checked_by_user_id' => $student->id, 'checked_at' => now()]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->patchJson("/api/v1/profesor/incidents/{$incident->id}/students", [
+        'students' => [['student_id' => $student->id, 'status' => 'AUSENTE']],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.updated_students', 0);
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'SEGURO']);
+});
+
+test('notifies tutors of students who have not reported their status', function () {
+    ['teacher' => $teacher, 'group' => $group, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $unreportedStudent = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+    $reportedStudent = User::factory()->student()->create(['governance_user_id' => null, 'group_id' => $group->id]);
+
+    $tutor = Tutor::factory()->create();
+    $unreportedStudent->tutors()->attach($tutor->id, ['relationship' => 'Madre', 'is_primary' => true, 'receives_notifications' => true]);
+
+    $incident = Incident::factory()->create(['reported_by_user_id' => $teacher->id, 'schedule_id' => $schedule->id]);
+    $incident->students()->attach($unreportedStudent->id, ['status' => 'DESCONOCIDO', 'checked_by_user_id' => $teacher->id, 'checked_at' => now()]);
+    $incident->students()->attach($reportedStudent->id, ['status' => 'SEGURO', 'checked_by_user_id' => $reportedStudent->id, 'checked_at' => now()]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson("/api/v1/profesor/incidents/{$incident->id}/notify-unreported", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.notified_count', 1);
+    $this->assertDatabaseHas('notifications', [
+        'tutor_id' => $tutor->id,
+        'student_id' => $unreportedStudent->id,
+        'type' => 'INCIDENTE',
+    ]);
+});
+
+test('rejects notifying unreported students for an incident reported by another teacher', function () {
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $incident = Incident::factory()->create(['schedule_id' => $schedule->id]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->postJson("/api/v1/profesor/incidents/{$incident->id}/notify-unreported", [], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
 });
 
 test('returns 404 for a nonexistent incident', function () {

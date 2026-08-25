@@ -82,6 +82,23 @@ test('updates the emergency roster status of an incident', function () {
     $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'SEGURO']);
 });
 
+test('a student already marked safe cannot be reverted to another status', function () {
+    $group = makeActiveGroup();
+    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    $incident = Incident::factory()->create(['schedule_id' => $schedule->id]);
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    $incident->students()->attach($student->id, ['status' => 'SEGURO', 'checked_by_user_id' => $student->id, 'checked_at' => now()]);
+
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->patchJson("/api/v1/administrador/incidents/{$incident->id}/students", [
+        'students' => [['student_id' => $student->id, 'status' => 'DESCONOCIDO']],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.updated_count', 0);
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'SEGURO']);
+});
+
 test('returns 404 for a nonexistent incident', function () {
     $token = fakeGovernanceAuth(makeAdmin(999));
 

@@ -218,10 +218,17 @@ class IncidentController extends Controller
         $this->assertNotClosed($incidentModel);
 
         $data = $request->validated();
+        $updated = 0;
 
         foreach ($data['students'] as $entry) {
-            $newStatus = $entry['present'] ? 'PRESENTE' : 'AUSENTE';
+            $newStatus = $entry['status'];
             $previousStatus = $incidentModel->students()->where('users.id', $entry['student_id'])->first()?->pivot->status;
+
+            // Una vez que un alumno queda confirmado a salvo (por si mismo o por el
+            // profesor), no se puede revertir por accidente a otro estatus desde aqui.
+            if ($previousStatus === 'SEGURO') {
+                continue;
+            }
 
             $incidentModel->students()->syncWithoutDetaching([
                 $entry['student_id'] => [
@@ -230,6 +237,8 @@ class IncidentController extends Controller
                     'checked_at' => now(),
                 ],
             ]);
+
+            $updated++;
 
             if ($previousStatus !== $newStatus) {
                 $auditLogger->log(
@@ -246,12 +255,43 @@ class IncidentController extends Controller
         $incidentModel->load('students');
         $present = $incidentModel->students->where('pivot.status', 'PRESENTE')->count();
         $absent = $incidentModel->students->where('pivot.status', 'AUSENTE')->count();
+        $safe = $incidentModel->students->where('pivot.status', 'SEGURO')->count();
 
         return $this->successResponse('Lista de emergencia actualizada correctamente.', [
             'incident_id' => $incidentModel->id,
-            'updated_students' => count($data['students']),
+            'updated_students' => $updated,
             'present_count' => $present,
             'absent_count' => $absent,
+            'safe_count' => $safe,
+        ]);
+    }
+
+    public function notifyUnreported(Request $request, int $incident, NotificationService $notificationService): JsonResponse
+    {
+        $incidentModel = $this->findIncident($incident);
+
+        if ($incidentModel->reported_by_user_id !== $request->user()->id) {
+            throw ApiException::forbidden('No tienes acceso a este recurso.', 'PERM01');
+        }
+
+        $this->assertNotClosed($incidentModel);
+
+        $incidentModel->load('students');
+
+        $unreported = $incidentModel->students->filter(fn ($student) => $student->pivot->status === 'DESCONOCIDO');
+
+        foreach ($unreported as $student) {
+            $notificationService->broadcast(
+                $student,
+                'INCIDENTE',
+                'Alumno sin reportar',
+                "{$student->fullName()} aún no se ha reportado a salvo durante el incidente activo en la escuela.",
+                $request->user()->id,
+            );
+        }
+
+        return $this->successResponse('Se notificó a los tutores de los alumnos sin reportar.', [
+            'notified_count' => $unreported->count(),
         ]);
     }
 

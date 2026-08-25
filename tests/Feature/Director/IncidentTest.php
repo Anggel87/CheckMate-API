@@ -137,3 +137,20 @@ test('updates the emergency roster status of an incident', function () {
     $response->assertOk()->assertJsonPath('data.updated_count', 1);
     $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'SEGURO']);
 });
+
+test('a student already marked safe cannot be reverted to another status', function () {
+    ['director' => $director, 'group' => $group] = makeCareerDirector();
+    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    $incident = Incident::factory()->create(['schedule_id' => $schedule->id]);
+    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    $incident->students()->attach($student->id, ['status' => 'SEGURO', 'checked_by_user_id' => $student->id, 'checked_at' => now()]);
+
+    $token = fakeGovernanceAuth($director);
+
+    $response = $this->patchJson("/api/v1/director-carrera/incidents/{$incident->id}/students", [
+        'students' => [['student_id' => $student->id, 'status' => 'DESCONOCIDO']],
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()->assertJsonPath('data.updated_count', 0);
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $incident->id, 'student_id' => $student->id, 'status' => 'SEGURO']);
+});

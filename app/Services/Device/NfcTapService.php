@@ -14,6 +14,7 @@ use App\Models\UserDetail;
 use App\Services\NotificationService;
 use App\Support\DayOfWeek;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class NfcTapService
 {
@@ -91,35 +92,44 @@ class NfcTapService
             throw ApiException::forbidden('Este alumno no pertenece al grupo de esta clase.', 'ATT02');
         }
 
-        $session = ClassSession::where('schedule_id', $schedule->id)
-            ->whereDate('date', $now->toDateString())
-            ->where('status', 'ABIERTA')
-            ->first();
+        // Bloquea la fila de la sesión para que este tap y un cierre automático concurrente
+        // (class-sessions:auto-close) no se entrelacen: sin esto, un tap que llega justo cuando
+        // el cron está cerrando la clase puede crear una asistencia NFC a la vez que el cron crea
+        // una FALTA por SISTEMA para el mismo alumno, dejando dos registros para la misma sesión.
+        $attendance = DB::transaction(function () use ($schedule, $student, $device, $now, $scannedAtRaw) {
+            $session = ClassSession::where('schedule_id', $schedule->id)
+                ->whereDate('date', $now->toDateString())
+                ->where('status', 'ABIERTA')
+                ->lockForUpdate()
+                ->first();
 
-        if ($session === null) {
-            throw ApiException::notFound('La sesión de clase no existe o ya fue cerrada.', 'SES02');
-        }
+            if ($session === null) {
+                throw ApiException::notFound('La sesión de clase no existe o ya fue cerrada.', 'SES02');
+            }
 
-        if (Attendance::where('class_session_id', $session->id)->where('student_id', $student->id)->exists()) {
-            throw ApiException::conflict('Este alumno ya registró su asistencia en esta sesión.', 'ATT01');
-        }
+            if (Attendance::where('class_session_id', $session->id)->where('student_id', $student->id)->exists()) {
+                throw ApiException::conflict('Este alumno ya registró su asistencia en esta sesión.', 'ATT01');
+            }
 
-        $scannedAt = $scannedAtRaw !== null ? Carbon::parse($scannedAtRaw) : $now;
-        $status = $this->resolveStatus($session, $scannedAt);
+            $scannedAt = $scannedAtRaw !== null ? Carbon::parse($scannedAtRaw) : $now;
+            $status = $this->resolveStatus($session, $scannedAt);
 
-        $attendance = Attendance::create([
-            'class_session_id' => $session->id,
-            'student_id' => $student->id,
-            'schedule_id' => $schedule->id,
-            'devices_id' => $device->id,
-            'registered_at' => $scannedAt,
-            'status' => $status,
-            'method' => 'NFC',
-        ]);
+            return Attendance::create([
+                'class_session_id' => $session->id,
+                'student_id' => $student->id,
+                'schedule_id' => $schedule->id,
+                'devices_id' => $device->id,
+                'registered_at' => $scannedAt,
+                'status' => $status,
+                'method' => 'NFC',
+            ]);
+        });
 
         AttendanceRegistered::dispatch($attendance, $student->id);
 
-        if ($status === 'RETARDO') {
+        // Fuera de la transacción a propósito: manda un WhatsApp real (I/O externo) y no debe
+        // mantener el lock de la fila de sesión abierto mientras espera esa llamada de red.
+        if ($attendance->status === 'RETARDO') {
             $this->notifications->notifyLate($attendance);
         }
 

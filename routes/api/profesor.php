@@ -48,6 +48,7 @@ Route::prefix('profesor')
         Route::post('/incidents', [IncidentController::class, 'store'])->name('incidents.store');
         Route::put('/incidents/{incident}', [IncidentController::class, 'update'])->name('incidents.update');
         Route::patch('/incidents/{incident}/students', [IncidentController::class, 'updateStudents'])->name('incidents.students.update');
+        Route::post('/incidents/{incident}/notify-unreported', [IncidentController::class, 'notifyUnreported'])->name('incidents.notify-unreported');
 
         Route::get('/claims', [ClaimController::class, 'index'])->name('claims.index');
         Route::get('/claims/{claim}', [ClaimController::class, 'show'])->name('claims.show');

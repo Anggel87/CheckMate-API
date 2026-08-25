@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Alumno\ClaimController;
+use App\Http\Controllers\Alumno\IncidentController;
 use App\Http\Controllers\Alumno\JustificationController;
 use App\Http\Controllers\Alumno\NotificationController;
 use App\Http\Controllers\Alumno\ProfileController;
@@ -41,5 +42,6 @@ Route::prefix('alumno')
         Route::get('/subjects/{subject}', [SubjectController::class, 'show'])->name('subjects.show');
         Route::get('/subjects/{subject}/attendance', [SubjectController::class, 'attendance'])->name('subjects.attendance');
         Route::post('/subjects/{subject}/attendance/{attendance}/justify', [JustificationController::class, 'store'])->name('subjects.attendance.justify');
-        Route::get('/incidents/active', [\App\Http\Controllers\Profesor\IncidentController::class, 'active'])->name('incidents.active');
+        Route::get('/incidents/active', [IncidentController::class, 'active'])->name('incidents.active');
+        Route::post('/incidents/{incident}/report-safe', [IncidentController::class, 'reportSafe'])->name('incidents.report-safe');
     });
