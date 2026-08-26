@@ -28,6 +28,7 @@ class StudentProfileResource extends JsonResource
             'birth_date' => $this->birth_date?->format('Y-m-d'),
             'gender' => $this->gender,
             'photo_url' => $this->photo ? Storage::disk('public')->url($this->photo) : null,
+            'nfc_uid' => $this->details?->nfc_uid,
             'group' => $this->whenLoaded('group', fn () => [
                 'id' => $this->group->id,
                 'grade' => $this->group->grade,

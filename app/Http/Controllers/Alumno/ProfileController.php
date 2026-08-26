@@ -16,7 +16,7 @@ class ProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['group.career', 'tutors']);
+        $user = $request->user()->load(['group.career', 'tutors', 'details']);
 
         return $this->successResponse('Perfil obtenido correctamente.', new StudentProfileResource($user));
     }
@@ -36,7 +36,7 @@ class ProfileController extends Controller
 
         return $this->successResponse(
             'Perfil actualizado correctamente.',
-            new StudentProfileResource($user->load(['group.career', 'tutors'])),
+            new StudentProfileResource($user->load(['group.career', 'tutors', 'details'])),
         );
     }
 }

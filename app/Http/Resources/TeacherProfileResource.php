@@ -28,6 +28,7 @@ class TeacherProfileResource extends JsonResource
             'birth_date' => $this->birth_date?->format('Y-m-d'),
             'gender' => $this->gender,
             'photo_url' => $this->photo ? Storage::disk('public')->url($this->photo) : null,
+            'nfc_uid' => $this->details?->nfc_uid,
             'role' => $this->whenLoaded('role', fn () => $this->role->name),
             'tutored_groups' => $this->when(
                 $this->relationLoaded('academicTutor') && $this->academicTutor?->relationLoaded('activeGroups'),
