@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Director;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\GuardsSingleActiveIncident;
 use App\Http\Controllers\Concerns\LoadsIncidentHistory;
+use App\Http\Controllers\Concerns\ResolvesIncidentAssignment;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Requests\Director\CloseIncidentRequest;
@@ -15,7 +16,6 @@ use App\Http\Resources\IncidentActiveResource;
 use App\Http\Resources\IncidentDetailResource;
 use App\Http\Resources\IncidentResource;
 use App\Models\Incident;
-use App\Models\Schedule;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\Director\CareerScope;
@@ -26,7 +26,7 @@ use Illuminate\Http\Request;
 
 class IncidentController extends Controller
 {
-    use ApiResponse, GuardsSingleActiveIncident, LoadsIncidentHistory, ValidatesEvidenceFile;
+    use ApiResponse, GuardsSingleActiveIncident, LoadsIncidentHistory, ResolvesIncidentAssignment, ValidatesEvidenceFile;
 
     public function index(Request $request, CareerScope $scope): JsonResponse
     {
@@ -81,27 +81,29 @@ class IncidentController extends Controller
     {
         $director = $request->user();
         $careerIds = $scope->assertHasCareer($director);
+        $allowedGroupIds = $scope->groupIds($careerIds);
         $data = $request->validated();
+        $groupIds = $data['group_ids'] ?? [];
 
         $this->assertNoActiveIncidentExists();
         $this->assertValidEvidence($request->file('evidence'));
 
-        $schedule = Schedule::whereIn('group_id', $scope->groupIds($careerIds))->find($data['schedule_id']);
-
-        if ($schedule === null) {
+        if (! empty($groupIds) && collect($groupIds)->diff($allowedGroupIds)->isNotEmpty()) {
             throw ApiException::forbidden('No tienes acceso a este recurso.', 'PERM01');
         }
+
+        $schedule = $this->resolveResponsibleSchedule($data['responsible_user_id'], $groupIds, $allowedGroupIds);
 
         $evidencePath = $request->hasFile('evidence')
             ? $request->file('evidence')->store('incidents', 'public')
             : null;
 
         $incident = Incident::create([
-            'reported_by_user_id' => $director->id,
+            'reported_by_user_id' => $data['responsible_user_id'],
             'schedule_id' => $schedule->id,
-            'title' => $data['title'],
+            'title' => $data['title'] ?? $this->defaultIncidentTitle($data['type']),
             'description' => $data['description'] ?? null,
-            'severity' => $data['severity'],
+            'severity' => $data['severity'] ?? null,
             'evidence' => $evidencePath,
             'incident_at' => now(),
             'status' => 'ACTIVO',
@@ -109,13 +111,7 @@ class IncidentController extends Controller
             'type' => $data['type'],
         ]);
 
-        foreach ($data['student_ids'] as $studentId) {
-            $incident->students()->attach($studentId, [
-                'status' => 'DESCONOCIDO',
-                'checked_by_user_id' => $director->id,
-                'checked_at' => now(),
-            ]);
-        }
+        $this->attachIncidentGroups($incident, $groupIds, $director->id);
 
         $incident->load(['reporter', 'schedule.group', 'students']);
 
@@ -124,6 +120,7 @@ class IncidentController extends Controller
             'title' => $incident->title,
             'severity' => $incident->severity,
             'status' => $incident->status,
+            'responsible_user_id' => $data['responsible_user_id'],
         ]);
 
         $this->notifySchoolWideIncident($incident, $director->id, $notificationService);

@@ -4,6 +4,8 @@ use App\Mail\TemporaryPasswordMail;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserDetail;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
@@ -96,6 +98,26 @@ test('creates a tutor academico through the generic endpoint', function () {
     $teacher = User::where('email', 'juan.ramirez@example.com')->firstOrFail();
     expect($teacher->role->name)->toBe('tutor_academico');
     $this->assertDatabaseHas('academic_tutors', ['user_id' => $teacher->id, 'is_active' => true]);
+});
+
+test('registers a tutor academico in governance with the tutor_academico role, not profesor', function () {
+    Mail::fake();
+    Role::firstOrCreate(['name' => 'tutor_academico']);
+    $token = fakeGovernanceAuth(makeAdmin());
+
+    Http::fake([
+        '*/internal/users' => Http::response([
+            'data' => ['user' => ['id' => 500], 'temporary_password' => 'Temp1234!'],
+        ], 201),
+    ]);
+
+    $this->postJson('/api/v1/administrador/users', [
+        ...baseUserPayload(),
+        'role' => 'tutor_academico',
+    ], ['Authorization' => "Bearer {$token}"])->assertCreated();
+
+    Http::assertSent(fn (Request $request) => $request->url() === config('services.governance.base_url').'/internal/users'
+        && $request['role'] === 'tutor_academico');
 });
 
 test('creates a director_carrera account, which had no creation flow before', function () {

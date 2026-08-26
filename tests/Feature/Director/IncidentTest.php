@@ -5,7 +5,7 @@ use App\Models\User;
 
 test('creates an incident within the director career', function () {
     ['director' => $director, 'group' => $group] = makeCareerDirector();
-    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
     $student = User::factory()->student()->create(['group_id' => $group->id]);
 
     $token = fakeGovernanceAuth($director);
@@ -14,17 +14,35 @@ test('creates an incident within the director career', function () {
         'type' => 'FIRE',
         'title' => 'Conato de incendio',
         'severity' => 'ALTA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
+        'group_ids' => [$group->id],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated()->assertJsonPath('data.title', 'Conato de incendio');
-    $this->assertDatabaseHas('incidents', ['schedule_id' => $schedule->id, 'reviewed_by_user_id' => $director->id]);
+    $this->assertDatabaseHas('incidents', ['schedule_id' => $schedule->id, 'reported_by_user_id' => $teacher->id, 'reviewed_by_user_id' => $director->id]);
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $response->json('data.id'), 'student_id' => $student->id]);
+});
+
+test('rejects a responsible teacher whose active schedule falls outside the director career', function () {
+    ['director' => $director] = makeCareerDirector();
+    $otherGroup = makeActiveGroup();
+    ['teacher' => $otherTeacher] = makeTeacherWithSchedule($otherGroup, null, 2);
+
+    $token = fakeGovernanceAuth($director);
+
+    $response = $this->postJson('/api/v1/director-carrera/incidents', [
+        'type' => 'FIRE',
+        'title' => 'Conato de incendio',
+        'severity' => 'ALTA',
+        'responsible_user_id' => $otherTeacher->id,
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
 });
 
 test('records a history trail including the closing resolution', function () {
     ['director' => $director, 'group' => $group] = makeCareerDirector();
-    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    ['teacher' => $teacher] = makeTeacherWithSchedule($group, null, 2);
     $student = User::factory()->student()->create(['group_id' => $group->id]);
 
     $token = fakeGovernanceAuth($director);
@@ -33,8 +51,8 @@ test('records a history trail including the closing resolution', function () {
         'type' => 'FIRE',
         'title' => 'Conato de incendio',
         'severity' => 'ALTA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
+        'group_ids' => [$group->id],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $incidentId = $created->json('data.id');
@@ -54,11 +72,10 @@ test('records a history trail including the closing resolution', function () {
     expect($response->json('data.history.2.after.status'))->toBe('RESUELTO');
 });
 
-test('rejects an incident for a schedule outside the director career', function () {
-    ['director' => $director] = makeCareerDirector();
+test('rejects group_ids outside the director career even when the responsible teacher is in scope', function () {
+    ['director' => $director, 'group' => $group] = makeCareerDirector();
+    ['teacher' => $teacher] = makeTeacherWithSchedule($group, null, 2);
     $otherGroup = makeActiveGroup();
-    ['schedule' => $otherSchedule] = makeTeacherWithSchedule($otherGroup, null, 2);
-    $student = User::factory()->student()->create(['group_id' => $otherGroup->id]);
 
     $token = fakeGovernanceAuth($director);
 
@@ -66,8 +83,8 @@ test('rejects an incident for a schedule outside the director career', function 
         'type' => 'FIRE',
         'title' => 'Conato de incendio',
         'severity' => 'ALTA',
-        'schedule_id' => $otherSchedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
+        'group_ids' => [$otherGroup->id],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertForbidden()->assertJsonPath('error_code', 'PERM01');
@@ -104,8 +121,7 @@ test('rejects closing an already closed incident', function () {
 
 test('rejects creating an incident while another one is active, even one reported by another role', function () {
     ['director' => $director, 'group' => $group] = makeCareerDirector();
-    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
-    $student = User::factory()->student()->create(['group_id' => $group->id]);
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
     Incident::factory()->create(['schedule_id' => $schedule->id, 'status' => 'ACTIVO']);
 
     $token = fakeGovernanceAuth($director);
@@ -114,8 +130,7 @@ test('rejects creating an incident while another one is active, even one reporte
         'type' => 'FIRE',
         'title' => 'Otro incidente',
         'severity' => 'ALTA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertConflict()->assertJsonPath('error_code', 'INC04');

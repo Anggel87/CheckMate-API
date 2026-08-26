@@ -4,9 +4,9 @@ use App\Models\AppNotification;
 use App\Models\Incident;
 use App\Models\User;
 
-test('creates an incident anchored to any schedule, unlike the career-scoped director endpoint', function () {
+test('creates an incident anchored to the responsible teacher\'s schedule, unlike the career-scoped director endpoint', function () {
     $group = makeActiveGroup();
-    ['schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule($group, null, 2);
     $student = User::factory()->student()->create(['group_id' => $group->id]);
 
     $token = fakeGovernanceAuth(makeAdmin(999));
@@ -15,12 +15,42 @@ test('creates an incident anchored to any schedule, unlike the career-scoped dir
         'type' => 'FIRE',
         'title' => 'Conato de incendio',
         'severity' => 'ALTA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
+        'group_ids' => [$group->id],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated()->assertJsonPath('data.title', 'Conato de incendio');
-    $this->assertDatabaseHas('incidents', ['schedule_id' => $schedule->id]);
+    $this->assertDatabaseHas('incidents', ['schedule_id' => $schedule->id, 'reported_by_user_id' => $teacher->id]);
+    $this->assertDatabaseHas('incident_students', ['incident_id' => $response->json('data.id'), 'student_id' => $student->id]);
+});
+
+test('creates an incident with an auto-generated title and no severity when both are omitted', function () {
+    $group = makeActiveGroup();
+    ['teacher' => $teacher] = makeTeacherWithSchedule($group, null, 2);
+
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->postJson('/api/v1/administrador/incidents', [
+        'type' => 'GAS',
+        'responsible_user_id' => $teacher->id,
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertCreated();
+    expect($response->json('data.title'))->toContain('Fuga de gas');
+    expect($response->json('data.severity'))->toBeNull();
+});
+
+test('rejects a responsible user who is not a teacher or academic tutor', function () {
+    $student = User::factory()->student()->create();
+
+    $token = fakeGovernanceAuth(makeAdmin(999));
+
+    $response = $this->postJson('/api/v1/administrador/incidents', [
+        'type' => 'FIRE',
+        'responsible_user_id' => $student->id,
+    ], ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertUnprocessable()->assertJsonPath('error_code', 'VAL04');
 });
 
 test('lists incidents from every group in the school', function () {
@@ -108,9 +138,8 @@ test('returns 404 for a nonexistent incident', function () {
 });
 
 test('rejects creating an incident while another one is active', function () {
-    ['schedule' => $schedule] = makeTeacherWithSchedule(makeActiveGroup(), null, 2);
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule(makeActiveGroup(), null, 2);
     Incident::factory()->create(['schedule_id' => $schedule->id, 'status' => 'ACTIVO']);
-    $student = User::factory()->student()->create();
 
     $token = fakeGovernanceAuth(makeAdmin(999));
 
@@ -118,17 +147,15 @@ test('rejects creating an incident while another one is active', function () {
         'type' => 'GAS',
         'title' => 'Fuga de gas',
         'severity' => 'ALTA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertConflict()->assertJsonPath('error_code', 'INC04');
 });
 
 test('allows creating a new incident once the active one is closed', function () {
-    ['schedule' => $schedule] = makeTeacherWithSchedule(makeActiveGroup(), null, 2);
+    ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule(makeActiveGroup(), null, 2);
     $closed = Incident::factory()->resolved()->create(['schedule_id' => $schedule->id]);
-    $student = User::factory()->student()->create();
 
     $token = fakeGovernanceAuth(makeAdmin(999));
 
@@ -136,8 +163,7 @@ test('allows creating a new incident once the active one is closed', function ()
         'type' => 'GAS',
         'title' => 'Fuga de gas',
         'severity' => 'ALTA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $teacher->id,
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated();
@@ -157,8 +183,8 @@ test('notifies the whole school when an incident is reported', function () {
         'type' => 'EARTHQUAKE',
         'title' => 'Sismo',
         'severity' => 'CRITICA',
-        'schedule_id' => $schedule->id,
-        'student_ids' => [$student->id],
+        'responsible_user_id' => $reportingTeacher->id,
+        'group_ids' => [$group->id],
     ], ['Authorization' => "Bearer {$token}"]);
 
     $response->assertCreated();

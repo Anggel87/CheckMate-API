@@ -29,12 +29,13 @@ class CreateTeacherService
         }
 
         $fullName = trim("{$teacherData['first_name']} {$teacherData['first_surname']} {$teacherData['second_surname']}");
+        $roleName = $isAcademicTutor ? 'tutor_academico' : 'profesor';
 
         try {
             $response = $this->governance->createUser([
                 'name' => $fullName,
                 'email' => $teacherData['email'],
-                'role' => 'profesor',
+                'role' => $roleName,
                 'active' => true,
             ]);
         } catch (ConnectionException) {
@@ -42,8 +43,6 @@ class CreateTeacherService
         }
 
         $photoPath = $photo?->store('users', 'public') ?? 'users/default.png';
-
-        $roleName = $isAcademicTutor ? 'tutor_academico' : 'profesor';
 
         $teacher = User::create([
             ...$teacherData,

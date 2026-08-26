@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Administrador;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Concerns\GuardsSingleActiveIncident;
 use App\Http\Controllers\Concerns\LoadsIncidentHistory;
+use App\Http\Controllers\Concerns\ResolvesIncidentAssignment;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Concerns\ValidatesEvidenceFile;
 use App\Http\Requests\Director\CloseIncidentRequest;
@@ -15,7 +16,6 @@ use App\Http\Resources\IncidentActiveResource;
 use App\Http\Resources\IncidentDetailResource;
 use App\Http\Resources\IncidentResource;
 use App\Models\Incident;
-use App\Models\Schedule;
 use App\Services\AuditLogger;
 use App\Services\NotificationService;
 use App\Traits\ApiResponse;
@@ -29,7 +29,7 @@ use Illuminate\Http\Request;
  */
 class IncidentController extends Controller
 {
-    use ApiResponse, GuardsSingleActiveIncident, LoadsIncidentHistory, ValidatesEvidenceFile;
+    use ApiResponse, GuardsSingleActiveIncident, LoadsIncidentHistory, ResolvesIncidentAssignment, ValidatesEvidenceFile;
 
     public function index(Request $request): JsonResponse
     {
@@ -76,26 +76,23 @@ class IncidentController extends Controller
     {
         $admin = $request->user();
         $data = $request->validated();
+        $groupIds = $data['group_ids'] ?? [];
 
         $this->assertNoActiveIncidentExists();
         $this->assertValidEvidence($request->file('evidence'));
 
-        $schedule = Schedule::find($data['schedule_id']);
-
-        if ($schedule === null) {
-            throw ApiException::notFound('El horario solicitado no existe.', 'SCH01');
-        }
+        $schedule = $this->resolveResponsibleSchedule($data['responsible_user_id'], $groupIds);
 
         $evidencePath = $request->hasFile('evidence')
             ? $request->file('evidence')->store('incidents', 'public')
             : null;
 
         $incident = Incident::create([
-            'reported_by_user_id' => $admin->id,
+            'reported_by_user_id' => $data['responsible_user_id'],
             'schedule_id' => $schedule->id,
-            'title' => $data['title'],
+            'title' => $data['title'] ?? $this->defaultIncidentTitle($data['type']),
             'description' => $data['description'] ?? null,
-            'severity' => $data['severity'],
+            'severity' => $data['severity'] ?? null,
             'evidence' => $evidencePath,
             'incident_at' => now(),
             'status' => 'ACTIVO',
@@ -103,13 +100,7 @@ class IncidentController extends Controller
             'type' => $data['type'],
         ]);
 
-        foreach ($data['student_ids'] as $studentId) {
-            $incident->students()->attach($studentId, [
-                'status' => 'DESCONOCIDO',
-                'checked_by_user_id' => $admin->id,
-                'checked_at' => now(),
-            ]);
-        }
+        $this->attachIncidentGroups($incident, $groupIds, $admin->id);
 
         $incident->load(['reporter', 'schedule.group', 'students']);
 
@@ -118,6 +109,7 @@ class IncidentController extends Controller
             'title' => $incident->title,
             'severity' => $incident->severity,
             'status' => $incident->status,
+            'responsible_user_id' => $data['responsible_user_id'],
         ]);
 
         $this->notifySchoolWideIncident($incident, $admin->id, $notificationService);
