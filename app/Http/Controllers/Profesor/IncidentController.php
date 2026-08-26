@@ -37,6 +37,7 @@ class IncidentController extends Controller
 
         $incidents = Incident::query()
             ->where('reported_by_user_id', $request->user()->id)
+            ->with(['reporter', 'reviewer', 'schedule.group', 'students.group'])
             ->when($request->query('type'), fn ($query, $type) => $query->where('type', $type))
             ->when($dateFrom, fn ($query, $date) => $query->whereDate('incident_at', '>=', $date))
             ->when($dateTo, fn ($query, $date) => $query->whereDate('incident_at', '<=', $date))
@@ -65,7 +66,7 @@ class IncidentController extends Controller
             throw ApiException::forbidden('No tienes acceso a este recurso.', 'PERM01');
         }
 
-        $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $incidentModel->load(['reporter', 'reviewer', 'schedule.group', 'students.group']);
         $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente obtenido correctamente.', new IncidentDetailResource($incidentModel));
@@ -129,7 +130,7 @@ class IncidentController extends Controller
             }
         }
 
-        $incident->load(['reporter', 'schedule.group', 'students']);
+        $incident->load(['reporter', 'reviewer', 'schedule.group', 'students.group']);
 
         $auditLogger->log('incident', $incident->id, 'CREATE', $request->user()->id, null, [
             'type' => $incident->type,
@@ -201,7 +202,7 @@ class IncidentController extends Controller
             }
         }
 
-        $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $incidentModel->load(['reporter', 'reviewer', 'schedule.group', 'students.group']);
         $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente actualizado correctamente.', new IncidentDetailResource($incidentModel));

@@ -146,6 +146,38 @@ test('lists only incidents reported by the teacher', function () {
     $response->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine->id);
 });
 
+test('shows who reported and who reviewed an incident, and every affected group', function () {
+    ['teacher' => $teacher, 'group' => $groupA, 'schedule' => $schedule] = makeTeacherWithSchedule();
+    $groupB = makeActiveGroup();
+    $admin = makeAdmin(2);
+
+    $incident = Incident::factory()->create([
+        'reported_by_user_id' => $teacher->id,
+        'reviewed_by_user_id' => $admin->id,
+        'schedule_id' => $schedule->id,
+    ]);
+
+    $studentA = User::factory()->student()->create(['group_id' => $groupA->id]);
+    $studentB = User::factory()->student()->create(['group_id' => $groupB->id]);
+    $incident->students()->attach([$studentA->id, $studentB->id], [
+        'status' => 'DESCONOCIDO',
+        'checked_by_user_id' => $admin->id,
+        'checked_at' => now(),
+    ]);
+
+    $token = fakeGovernanceAuth($teacher);
+
+    $response = $this->getJson("/api/v1/profesor/incidents/{$incident->id}", ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.reporter.id', $teacher->id)
+        ->assertJsonPath('data.reviewer.id', $admin->id)
+        ->assertJsonCount(2, 'data.groups');
+
+    $groupIds = collect($response->json('data.groups'))->pluck('id')->sort()->values()->all();
+    expect($groupIds)->toBe(collect([$groupA->id, $groupB->id])->sort()->values()->all());
+});
+
 test('lists all active incidents regardless of reporter', function () {
     ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule();
     Incident::factory()->create(['schedule_id' => $schedule->id, 'status' => 'ACTIVO']);

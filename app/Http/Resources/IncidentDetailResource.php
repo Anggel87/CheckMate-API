@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\DerivesIncidentGroups;
 use App\Models\Incident;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -10,13 +11,13 @@ use Illuminate\Support\Facades\Storage;
 /** @mixin Incident */
 class IncidentDetailResource extends JsonResource
 {
+    use DerivesIncidentGroups;
+
     /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
-        $group = $this->schedule->group;
-
         return [
             'id' => $this->id,
             'type' => $this->type,
@@ -28,13 +29,11 @@ class IncidentDetailResource extends JsonResource
                 'id' => $this->reporter->id,
                 'full_name' => $this->reporter->fullName(),
             ],
-            'groups' => [
-                [
-                    'id' => $group->id,
-                    'grade' => $group->grade,
-                    'section' => $group->section,
-                ],
+            'reviewer' => [
+                'id' => $this->reviewer->id,
+                'full_name' => $this->reviewer->fullName(),
             ],
+            'groups' => $this->affectedGroups(),
             'students' => $this->students->map(fn ($student) => [
                 'id' => $student->id,
                 'full_name' => $student->fullName(),

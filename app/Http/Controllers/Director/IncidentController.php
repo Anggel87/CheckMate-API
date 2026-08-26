@@ -42,6 +42,7 @@ class IncidentController extends Controller
 
         $incidents = Incident::query()
             ->whereHas('schedule', fn ($query) => $query->whereIn('group_id', $groupIds))
+            ->with(['reporter', 'reviewer', 'schedule.group', 'students.group'])
             ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
             ->when($request->query('severity'), fn ($query, $severity) => $query->where('severity', $severity))
             ->when($dateFrom, fn ($query, $date) => $query->whereDate('incident_at', '>=', $date))
@@ -71,7 +72,7 @@ class IncidentController extends Controller
     {
         $incidentModel = $this->findIncident($request->user(), $incident, $scope);
 
-        $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $incidentModel->load(['reporter', 'reviewer', 'schedule.group', 'students.group']);
         $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente obtenido correctamente.', new IncidentDetailResource($incidentModel));
@@ -113,7 +114,7 @@ class IncidentController extends Controller
 
         $this->attachIncidentGroups($incident, $groupIds, $director->id);
 
-        $incident->load(['reporter', 'schedule.group', 'students']);
+        $incident->load(['reporter', 'reviewer', 'schedule.group', 'students.group']);
 
         $auditLogger->log('incident', $incident->id, 'CREATE', $director->id, null, [
             'type' => $incident->type,
@@ -153,7 +154,7 @@ class IncidentController extends Controller
             $auditLogger->log('incident', $incidentModel->id, 'UPDATE', $request->user()->id, $before, $incidentModel->only(array_keys($editableFields)));
         }
 
-        $incidentModel->load(['reporter', 'schedule.group', 'students']);
+        $incidentModel->load(['reporter', 'reviewer', 'schedule.group', 'students.group']);
         $this->loadIncidentHistory($incidentModel);
 
         return $this->successResponse('Incidente actualizado correctamente.', new IncidentDetailResource($incidentModel));
