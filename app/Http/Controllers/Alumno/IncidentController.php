@@ -33,6 +33,8 @@ class IncidentController extends Controller
 
         return $this->successResponse('Incidente activo obtenido correctamente.', [
             ...(new IncidentActiveResource($incident))->toArray($request),
+            'title' => $incident->title,
+            'description' => $incident->description,
             'already_reported' => $alreadyReported,
         ]);
     }

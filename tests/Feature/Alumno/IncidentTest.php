@@ -17,14 +17,19 @@ test('returns null when there is no active incident', function () {
 test('reports the active incident and whether the student already marked themselves safe', function () {
     $group = makeActiveGroup();
     $student = User::factory()->student()->create(['governance_user_id' => 1, 'group_id' => $group->id]);
-    $incident = Incident::factory()->create();
+    $incident = Incident::factory()->create(['title' => 'Sismo', 'description' => 'Favor de evacuar de inmediato.']);
 
     $token = fakeGovernanceAuth($student);
 
     $response = $this->getJson('/api/v1/alumno/incidents/active', ['Authorization' => "Bearer {$token}"]);
 
+    // title/description son necesarios para el modal global de alerta de incidentes
+    // (IncidentAlertService), que en alumno consume este mismo endpoint directamente
+    // en lugar de un GET /incidents/{id} aparte, a diferencia de los demas roles.
     $response->assertOk()
         ->assertJsonPath('data.id', $incident->id)
+        ->assertJsonPath('data.title', 'Sismo')
+        ->assertJsonPath('data.description', 'Favor de evacuar de inmediato.')
         ->assertJsonPath('data.already_reported', false);
 });
 
