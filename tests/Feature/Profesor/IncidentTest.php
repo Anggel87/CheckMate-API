@@ -190,6 +190,30 @@ test('lists all active incidents regardless of reporter', function () {
     $response->assertOk()->assertJsonCount(1, 'data');
 });
 
+test('includes title and description on the active listing so a non-reporter never needs the ownership-gated detail endpoint', function () {
+    ['teacher' => $reporter, 'schedule' => $schedule] = makeTeacherWithSchedule(null, null, 2);
+    $incident = Incident::factory()->create([
+        'schedule_id' => $schedule->id,
+        'status' => 'ACTIVO',
+        'title' => 'Conato de incendio en laboratorio',
+        'description' => 'Humo detectado cerca de las computadoras.',
+    ]);
+
+    ['teacher' => $otherTeacher] = makeTeacherWithSchedule(null, null, 3);
+    $token = fakeGovernanceAuth($otherTeacher);
+
+    $response = $this->getJson('/api/v1/profesor/incidents/active', ['Authorization' => "Bearer {$token}"]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.0.title', 'Conato de incendio en laboratorio')
+        ->assertJsonPath('data.0.description', 'Humo detectado cerca de las computadoras.');
+
+    // El endpoint de detalle si sigue restringido al reportante — es GET /active el que
+    // ahora carga todo lo que necesita la alerta escolar sin depender de el.
+    $this->getJson("/api/v1/profesor/incidents/{$incident->id}", ['Authorization' => "Bearer {$token}"])
+        ->assertForbidden()->assertJsonPath('error_code', 'PERM01');
+});
+
 test('rejects updating an incident reported by another teacher', function () {
     ['teacher' => $teacher, 'schedule' => $schedule] = makeTeacherWithSchedule();
     $incident = Incident::factory()->create(['schedule_id' => $schedule->id]);
